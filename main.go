@@ -7,6 +7,7 @@ import (
 )
 
 func main() {
+	// Translating
 	settings := thecoffinofandyandleyley.NewTheCoffinOfAndyAndLeyleySettings()
 	settings.SourceFolder = "sourcePath"
 	settings.DestinationFolder = "targetPath"
@@ -19,8 +20,10 @@ func main() {
 
 	translating.StartTranslation(settings)
 
+	// File splitting TCOAAL
 	// filepath := "sourceCsv"
 	// splitting.SplitInFiles(filepath, "\r\n\r\n\r\n")
 
-	// lingvanex.Translate("ru", "be", "Что у тебя там? Всё в порядке?")
+	// Lingvanex Translator API Call
+	// fmt.Println(lingvanex.Translate("Что у тебя там? Всё в порядке?", "ru", "be"))
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"tw-translator/extracting"
+	"tw-translator/lingvanex"
 	"tw-translator/utils"
 
 	translategooglefree "github.com/bas24/googletranslatefree"
@@ -110,9 +111,13 @@ func translateLines(in_out []*extracting.DataLine, settings *TranslationSettings
 
 			isUpper := utils.IsUpper([]rune(trimmed)[0])
 
-			translated, err := translategooglefree.Translate(trimmed, settings.SourceLang, settings.TargetLang)
+			translated, err := lingvanex.Translate(trimmed, settings.SourceLang, settings.TargetLang)
 			if err != nil {
-				panic(err)
+				fmt.Println("---- Lingvanex failed - Try Google Api ----")
+				translated, err = translategooglefree.Translate(trimmed, settings.SourceLang, settings.TargetLang)
+				if err != nil {
+					panic(err)
+				}
 			}
 
 			runed := []rune(translated)
