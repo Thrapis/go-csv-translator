@@ -10,8 +10,8 @@ func main() {
 	settings := thecoffinofandyandleyley.NewTheCoffinOfAndyAndLeyleySettings()
 	settings.SourceFolder = "sourcePath"
 	settings.DestinationFolder = "targetPath"
-	settings.SourceLang = "en"
-	settings.TargetLang = "be-BY"
+	settings.SourceLang = "ru"
+	settings.TargetLang = "be"
 	settings.SourceFolderNameReplace = "en"
 	settings.TargetFolderNameReplace = "be"
 	settings.Exract = extracting.Extract
@@ -21,4 +21,6 @@ func main() {
 
 	// filepath := "sourceCsv"
 	// splitting.SplitInFiles(filepath, "\r\n\r\n\r\n")
+
+	// lingvanex.Translate("ru", "be", "Что у тебя там? Всё в порядке?")
 }
