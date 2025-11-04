@@ -16,4 +16,9 @@ type TranslationSettings struct {
 	TargetFolderNameReplace    string
 	Exract                     extracting.Extractor
 	Compose                    extracting.Composer
+	MultiRowReplicas           bool
+	Parasitizing               bool
+	ParasitizingFilePath       string
+	AreSameReplica             AreSameReplica
+	ParasiteReplica            ParasiteReplica
 }

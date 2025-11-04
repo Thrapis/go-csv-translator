@@ -71,7 +71,11 @@ func translateFolder(sourceFolder *Folder, destinationFolder string, settings *T
 			lines = lines[1:]
 		}
 
-		translateLines(lines, settings)
+		if settings.MultiRowReplicas {
+			translateMRRLines(lines, settings)
+		} else {
+			translateLines(lines, settings)
+		}
 
 		filePathToWrite := filepath.Join(destinationFolder, file.FullName)
 
@@ -137,3 +141,172 @@ func translateLines(in_out []*extracting.DataLine, settings *TranslationSettings
 		in_out[i].Value = translatedValue
 	}
 }
+
+func translateMRRLines(in_out []*extracting.DataLine, settings *TranslationSettings) {
+	start := 0
+	end := 0
+
+	for i := range in_out {
+
+		if start == i && i != len(in_out)-1 {
+			continue
+		}
+
+		if start != i && settings.AreSameReplica(in_out[start], in_out[i]) {
+			continue
+		}
+
+		// Collect all rows replica
+		end = i - 1
+		totalValue := ""
+		if settings.Parasitizing {
+			totalValue = settings.ParasiteReplica(settings.ParasitizingFilePath, in_out[start].Tag)
+		} else {
+			totalValueBuilder := strings.Builder{}
+			for j := start; j <= end; j++ {
+				totalValueBuilder.WriteString(in_out[j].Value)
+			}
+			totalValue = totalValueBuilder.String()
+		}
+
+		// If empty
+		if len(strings.TrimSpace(totalValue)) == 0 {
+			start = end + 1
+			continue
+		}
+
+		// Calculate filled rows
+		filled := 0
+		for j := start; j <= end; j++ {
+			if len(strings.TrimSpace(in_out[j].Value)) != 0 {
+				filled++
+			}
+		}
+
+		// Splitting into Partials
+		partialString := settings.Analyse(totalValue)
+
+		// Translate Partials
+		for _, part := range settings.PartialStringGetTypeString(partialString) {
+			trimmed := strings.TrimSpace(part.Value)
+
+			if len(trimmed) == 0 {
+				continue
+			}
+
+			leadingSpaces := utils.CountLeadingSpaces(part.Value)
+			finalSpaces := utils.CountFinalSpaces(part.Value)
+
+			isUpper := utils.IsUpper([]rune(trimmed)[0])
+
+			translated, err := lingvanex.Translate(trimmed, settings.SourceLang, settings.TargetLang)
+			if err != nil {
+				fmt.Println("---- Lingvanex failed - Try Google Api ----")
+				translated, err = translategooglefree.Translate(trimmed, settings.SourceLang, settings.TargetLang)
+				if err != nil {
+					panic(err)
+				}
+			}
+			// translated, err := translategooglefree.Translate(trimmed, settings.SourceLang, settings.TargetLang)
+			// if err != nil {
+			// 	panic(err)
+			// }
+
+			runed := []rune(translated)
+			if isUpper {
+				translated = strings.ToUpper(string(runed[0])) + string(runed[1:])
+			} else {
+				translated = strings.ToLower(string(runed[0])) + string(runed[1:])
+			}
+
+			part.Value = fmt.Sprintf("%s%s%s", strings.Repeat(" ", leadingSpaces), translated, strings.Repeat(" ", finalSpaces))
+		}
+
+		// Join Partials into string
+		translatedValue := settings.PartialStringString(partialString)
+
+		// Log progress
+		fmt.Printf("%d%% (%d of %d) - Translating: \"%.32s\" - \"%.32s\"\n", i*100/len(in_out), i, len(in_out), in_out[start].Value, translatedValue)
+
+		// Write translated
+		translatedRows := splitSentence(translatedValue, filled)
+		compensation := 0
+		for j := start; j <= end; j++ {
+			if len(strings.TrimSpace(in_out[j].Value)) == 0 {
+				compensation++
+				continue
+			}
+			in_out[j].Value = translatedRows[j-start-compensation]
+		}
+
+		start = end + 1
+	}
+}
+
+func splitSentence(sentence string, n int) []string {
+	if n <= 0 {
+		return []string{}
+	}
+
+	words := strings.Fields(sentence)
+	totalWords := len(words)
+
+	// If fewer words than parts, pad with empty strings
+	if totalWords < n {
+		result := make([]string, n)
+		for i := 0; i < totalWords; i++ {
+			result[i] = words[i]
+		}
+		// remaining entries are already ""
+		return result
+	}
+
+	// Otherwise, distribute words evenly
+	baseSize := totalWords / n
+	remainder := totalWords % n
+
+	result := make([]string, 0, n)
+	start := 0
+
+	for i := 0; i < n; i++ {
+		end := start + baseSize
+		if i < remainder {
+			end++
+		}
+		part := strings.Join(words[start:end], " ")
+		result = append(result, part)
+		start = end
+	}
+
+	return result
+}
+
+// func splitSentence(sentence string, n int) []string {
+// 	if n <= 0 {
+// 		return []string{}
+// 	}
+
+// 	words := strings.Fields(sentence)
+// 	totalWords := len(words)
+// 	if n > totalWords {
+// 		n = totalWords
+// 	}
+
+// 	baseSize := totalWords / n
+// 	remainder := totalWords % n
+
+// 	result := make([]string, 0, n)
+// 	start := 0
+
+// 	for i := 0; i < n; i++ {
+// 		end := start + baseSize
+// 		if i < remainder {
+// 			end++
+// 		}
+// 		part := strings.Join(words[start:end], " ")
+// 		result = append(result, part)
+// 		start = end
+// 	}
+
+// 	return result
+// }

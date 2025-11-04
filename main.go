@@ -17,6 +17,9 @@ func main() {
 	settings.TargetFolderNameReplace = "be"
 	settings.Exract = extracting.Extract
 	settings.Compose = extracting.Compose
+	settings.MultiRowReplicas = true
+	settings.Parasitizing = true
+	settings.ParasitizingFilePath = "parasitizingFilePath"
 
 	translating.StartTranslation(settings)
 

@@ -8,6 +8,8 @@ func NewTheCoffinOfAndyAndLeyleySettings() *translating.TranslationSettings {
 		PartialStringGetTypeString: PartialStringGetTypeString,
 		PartialStringString:        PartialStringString,
 		Delimeter:                  ",",
-		SkipFirstLine:              true,
+		SkipFirstLine:              false,
+		AreSameReplica:             AreSameReplica,
+		ParasiteReplica:            ParasiteReplica,
 	}
 }
