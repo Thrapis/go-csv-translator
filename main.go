@@ -1,14 +1,14 @@
 package main
 
 import (
-	"tw-translator/game/thecoffinofandyandleyley"
-	"tw-translator/game/thecoffinofandyandleyley/extracting"
+	"tw-translator/game/tcoaal"
+	"tw-translator/game/tcoaal/extracting"
 	"tw-translator/translating"
 )
 
 func main() {
 	// Translating
-	settings := thecoffinofandyandleyley.NewTheCoffinOfAndyAndLeyleySettings()
+	settings := tcoaal.NewTheCoffinOfAndyAndLeyleySettings()
 	settings.SourceFolder = "sourcePath"
 	settings.DestinationFolder = "targetPath"
 	settings.SourceLang = "ru"

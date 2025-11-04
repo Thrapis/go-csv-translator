@@ -1,4 +1,4 @@
-package thecoffinofandyandleyley
+package tcoaal
 
 import "tw-translator/translating"
 
