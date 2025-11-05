@@ -1,4 +1,4 @@
-package splitting
+package utils
 
 import (
 	"os"
@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func SplitInFiles(filepath string, delimeter string) {
+func SplitInFiles(filepath string) {
 	newdir, ext, _ := strings.Cut(filepath, ".")
 	os.Mkdir(newdir, os.ModePerm)
 

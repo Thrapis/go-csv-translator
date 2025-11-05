@@ -13,7 +13,7 @@ func main() {
 	settings.DestinationFolder = "targetPath"
 	settings.SourceLang = "ru"
 	settings.TargetLang = "be"
-	settings.SourceFolderNameReplace = "en"
+	settings.SourceFolderNameReplace = "ru"
 	settings.TargetFolderNameReplace = "be"
 	settings.Exract = extracting.Extract
 	settings.Compose = extracting.Compose
@@ -24,8 +24,13 @@ func main() {
 	translating.StartTranslation(settings)
 
 	// File splitting TCOAAL
-	// filepath := "sourceCsv"
-	// splitting.SplitInFiles(filepath, "\r\n\r\n\r\n")
+	// filepath := "filePath"
+	// utils.SplitInFiles(filepath)
+
+	// File merging TCOAAL
+	// dirpath := "dirpath"
+	// filepath := "filepath"
+	// utils.MergeFiles(dirpath, filepath)
 
 	// Lingvanex Translator API Call
 	// fmt.Println(lingvanex.Translate("Что у тебя там? Всё в порядке?", "ru", "be"))
