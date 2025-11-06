@@ -11,7 +11,7 @@ const LINGVANEX_ADDRESS = "127.0.0.1"
 const LINGVANEX_PORT = 8000
 
 func Translate(text, from, to string) (string, error) {
-	url := fmt.Sprintf("http://%s:%d", LINGVANEX_ADDRESS, LINGVANEX_PORT)
+	url := fmt.Sprintf("http://%s:%d?from=%s&to=%s", LINGVANEX_ADDRESS, LINGVANEX_PORT, from, to)
 
 	req, err := http.NewRequest("POST", url, bytes.NewReader([]byte(text)))
 	if err != nil {

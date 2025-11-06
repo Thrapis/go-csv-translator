@@ -1,1 +1,0 @@
-py ./ru-be-server.py
