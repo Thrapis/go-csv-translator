@@ -30,6 +30,7 @@ const (
 	TypeFontSizesymbol
 	TypeColorSymbol
 	TypeQuotesSymbol
+	TypeSpamSymbol
 )
 
 func StringPartGetTypeString(sp *translating.StringPart) []*translating.StringPart {

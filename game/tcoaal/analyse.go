@@ -11,15 +11,17 @@ const (
 	fontSizeSymbolPattern = `(\\[\{\}]{1})`
 	colorSymbolPattern    = `(\\c\[[0-9]{1}\])`
 	quotesSymbolPattern   = `([\"]{1})`
+	spamSymbolPattern     = `([\.]{4,})`
 )
 
 func Analyse(text string) *translating.PartialString {
-	var (
-		styleSymbolRegex    = regexp.MustCompile(styleSymbolPattern)
-		fontSizeSymbolRegex = regexp.MustCompile(fontSizeSymbolPattern)
-		colorSymbolRegex    = regexp.MustCompile(colorSymbolPattern)
-		quotesSymbolRegex   = regexp.MustCompile(quotesSymbolPattern)
-	)
+	regexes := []*regexp.Regexp{
+		regexp.MustCompile(styleSymbolPattern),
+		regexp.MustCompile(fontSizeSymbolPattern),
+		regexp.MustCompile(colorSymbolPattern),
+		regexp.MustCompile(quotesSymbolPattern),
+		regexp.MustCompile(spamSymbolPattern),
+	}
 
 	result := &translating.PartialString{
 		Parts: make([]*translating.StringPart, 0),
@@ -35,24 +37,11 @@ func Analyse(text string) *translating.PartialString {
 		fistIndex := len(focusString)
 		lastIndex := len(focusString)
 
-		styleSymbolIndeces := styleSymbolRegex.FindStringIndex(focusString)
-		if styleSymbolIndeces != nil && styleSymbolIndeces[0] < fistIndex {
-			fistIndex, lastIndex = styleSymbolIndeces[0], styleSymbolIndeces[1]
-		}
-
-		fontSizeSymbolIndeces := fontSizeSymbolRegex.FindStringIndex(focusString)
-		if fontSizeSymbolIndeces != nil && fontSizeSymbolIndeces[0] < fistIndex {
-			fistIndex, lastIndex = fontSizeSymbolIndeces[0], fontSizeSymbolIndeces[1]
-		}
-
-		colorSymbolIndeces := colorSymbolRegex.FindStringIndex(focusString)
-		if colorSymbolIndeces != nil && colorSymbolIndeces[0] < fistIndex {
-			fistIndex, lastIndex = colorSymbolIndeces[0], colorSymbolIndeces[1]
-		}
-
-		quotesIndeces := quotesSymbolRegex.FindStringIndex(focusString)
-		if quotesIndeces != nil && quotesIndeces[0] < fistIndex {
-			fistIndex, lastIndex = quotesIndeces[0], quotesIndeces[1]
+		for _, rx := range regexes {
+			indeces := rx.FindStringIndex(focusString)
+			if indeces != nil && indeces[0] < fistIndex {
+				fistIndex, lastIndex = indeces[0], indeces[1]
+			}
 		}
 
 		if fistIndex == len(focusString) {
@@ -79,33 +68,26 @@ func Analyse(text string) *translating.PartialString {
 	return result
 }
 
-func DetectPart(text string) *translating.StringPart {
-	var (
-		styleSymbolRegex    = regexp.MustCompile(styleSymbolPattern)
-		fontSizeSymbolRegex = regexp.MustCompile(fontSizeSymbolPattern)
-		colorSymbolRegex    = regexp.MustCompile(colorSymbolPattern)
-		quotesSymbolRegex   = regexp.MustCompile(quotesSymbolPattern)
-	)
+type matchToType struct {
+	Regex *regexp.Regexp
+	Type  int
+}
 
-	if match := styleSymbolRegex.MatchString(text); match {
-		return &translating.StringPart{
-			Type:  TypeStyleSymbol,
-			Value: styleSymbolRegex.FindStringSubmatch(text)[1],
-		}
-	} else if match := fontSizeSymbolRegex.MatchString(text); match {
-		return &translating.StringPart{
-			Type:  TypeFontSizesymbol,
-			Value: fontSizeSymbolRegex.FindStringSubmatch(text)[1],
-		}
-	} else if match := colorSymbolRegex.MatchString(text); match {
-		return &translating.StringPart{
-			Type:  TypeColorSymbol,
-			Value: colorSymbolRegex.FindStringSubmatch(text)[1],
-		}
-	} else if match := quotesSymbolRegex.MatchString(text); match {
-		return &translating.StringPart{
-			Type:  TypeQuotesSymbol,
-			Value: quotesSymbolRegex.FindStringSubmatch(text)[1],
+func DetectPart(text string) *translating.StringPart {
+	matchToTypes := []matchToType{
+		{Regex: regexp.MustCompile(styleSymbolPattern), Type: TypeStyleSymbol},
+		{Regex: regexp.MustCompile(fontSizeSymbolPattern), Type: TypeFontSizesymbol},
+		{Regex: regexp.MustCompile(colorSymbolPattern), Type: TypeColorSymbol},
+		{Regex: regexp.MustCompile(quotesSymbolPattern), Type: TypeQuotesSymbol},
+		{Regex: regexp.MustCompile(spamSymbolPattern), Type: TypeSpamSymbol},
+	}
+
+	for _, mt := range matchToTypes {
+		if match := mt.Regex.MatchString(text); match {
+			return &translating.StringPart{
+				Type:  mt.Type,
+				Value: mt.Regex.FindStringSubmatch(text)[1],
+			}
 		}
 	}
 
