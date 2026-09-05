@@ -11,7 +11,8 @@ const (
 	fontSizeSymbolPattern = `(\\[\{\}]{1})`
 	colorSymbolPattern    = `(\\c\[[0-9]{1}\])`
 	quotesSymbolPattern   = `([\"]{1})`
-	spamSymbolPattern     = `([\.]{4,})`
+	bracketSymbolPattern  = `(([\(]|[\)]){1})`
+	spamSymbolPattern     = `(([\.]|[\?]|[\!]|(\.\s){1,}){2,})`
 )
 
 func Analyse(text string) *translating.PartialString {
@@ -20,6 +21,7 @@ func Analyse(text string) *translating.PartialString {
 		regexp.MustCompile(fontSizeSymbolPattern),
 		regexp.MustCompile(colorSymbolPattern),
 		regexp.MustCompile(quotesSymbolPattern),
+		regexp.MustCompile(bracketSymbolPattern),
 		regexp.MustCompile(spamSymbolPattern),
 	}
 
@@ -79,6 +81,7 @@ func DetectPart(text string) *translating.StringPart {
 		{Regex: regexp.MustCompile(fontSizeSymbolPattern), Type: TypeFontSizesymbol},
 		{Regex: regexp.MustCompile(colorSymbolPattern), Type: TypeColorSymbol},
 		{Regex: regexp.MustCompile(quotesSymbolPattern), Type: TypeQuotesSymbol},
+		{Regex: regexp.MustCompile(bracketSymbolPattern), Type: TypeBracketSymbol},
 		{Regex: regexp.MustCompile(spamSymbolPattern), Type: TypeSpamSymbol},
 	}
 

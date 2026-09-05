@@ -30,6 +30,7 @@ const (
 	TypeFontSizesymbol
 	TypeColorSymbol
 	TypeQuotesSymbol
+	TypeBracketSymbol
 	TypeSpamSymbol
 )
 
@@ -56,6 +57,10 @@ func StringPartString(sp *translating.StringPart) string {
 	case TypeColorSymbol:
 		return sp.Value
 	case TypeQuotesSymbol:
+		return sp.Value
+	case TypeBracketSymbol:
+		return sp.Value
+	case TypeSpamSymbol:
 		return sp.Value
 	}
 }
