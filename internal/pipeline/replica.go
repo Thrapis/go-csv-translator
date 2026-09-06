@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/Thrapis/go-csv-translator/internal/extract"
@@ -31,26 +32,67 @@ func (p *Pipeline) translateRows(ctx context.Context, lines []extract.DataLine) 
 
 // translateReplicas groups consecutive rows that share a replica tag and
 // translates each group as one unit. Rows with no tag (header sections) are
-// each their own group.
+// each their own group. Groups touch disjoint slices of lines, so with
+// Options.Concurrency > 1 they are translated by a bounded worker pool.
 func (p *Pipeline) translateReplicas(ctx context.Context, lines []extract.DataLine) error {
 	if p.grouper == nil {
 		return p.translateRows(ctx, lines)
 	}
-	i := 0
-	for i < len(lines) {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
+
+	type span struct{ start, end int }
+	var groups []span
+	for i := 0; i < len(lines); {
 		j := i + 1
 		for j < len(lines) && p.grouper.SameReplica(lines[i], lines[j]) {
 			j++
 		}
-		if err := p.translateReplicaGroup(ctx, lines, i, j-1); err != nil {
-			return err
-		}
+		groups = append(groups, span{i, j - 1})
 		i = j
 	}
-	return nil
+
+	conc := p.opts.Concurrency
+	if conc < 1 {
+		conc = 1
+	}
+	if conc == 1 {
+		for _, g := range groups {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if err := p.translateReplicaGroup(ctx, lines, g.start, g.end); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	sem := make(chan struct{}, conc)
+	var wg sync.WaitGroup
+	var once sync.Once
+	var firstErr error
+
+	for _, g := range groups {
+		if ctx.Err() != nil {
+			break
+		}
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(g span) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			if ctx.Err() != nil {
+				return
+			}
+			if err := p.translateReplicaGroup(ctx, lines, g.start, g.end); err != nil {
+				once.Do(func() { firstErr = err; cancel() })
+			}
+		}(g)
+	}
+	wg.Wait()
+	return firstErr
 }
 
 func (p *Pipeline) translateReplicaGroup(ctx context.Context, lines []extract.DataLine, start, end int) error {

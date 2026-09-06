@@ -37,6 +37,9 @@ func (c *Config) applyDefaults() {
 	if c.LogLevel == "" {
 		c.LogLevel = "info"
 	}
+	if c.Concurrency < 1 {
+		c.Concurrency = 1
+	}
 	if len(c.Translators) == 0 {
 		c.Translators = []string{"lingvanex", "google"}
 	}

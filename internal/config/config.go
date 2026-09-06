@@ -19,6 +19,10 @@ type Config struct {
 	Delimiter        string `yaml:"delimiter"`
 	SkipFirstLine    bool   `yaml:"skipFirstLine"`
 	MultiRowReplicas bool   `yaml:"multiRowReplicas"`
+	// Concurrency is how many replicas to translate in parallel (default 1).
+	// It only affects speed, never the output. Pair it with INTER_THREADS in
+	// the Lingvanex server and keep the product near your CPU thread count.
+	Concurrency int `yaml:"concurrency"`
 
 	Parasitizing Parasitizing `yaml:"parasitizing"`
 	Translators  []string     `yaml:"translators"`

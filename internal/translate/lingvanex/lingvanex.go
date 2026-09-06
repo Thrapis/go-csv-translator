@@ -27,13 +27,7 @@ func init() {
 		}
 		return &Client{
 			baseURL: fmt.Sprintf("http://%s:%d", addr, port),
-			http: &http.Client{
-				Timeout: 60 * time.Second,
-				// The bundled server speaks HTTP/1.0 and closes the socket
-				// after each response; reusing a pooled connection races that
-				// close and fails the (non-retryable) POST with EOF.
-				Transport: &http.Transport{DisableKeepAlives: true},
-			},
+			http:    &http.Client{Timeout: 60 * time.Second},
 		}, nil
 	})
 }

@@ -30,6 +30,7 @@ type Options struct {
 	MultiRowReplicas  bool
 	Parasitizing      bool
 	ParasitizingFiles []string
+	Concurrency       int // parallel replica translations; <=1 means sequential
 }
 
 // Pipeline holds everything one run needs. Build it with New.

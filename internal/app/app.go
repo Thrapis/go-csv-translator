@@ -76,6 +76,7 @@ func New(cfg *config.Config, log *slog.Logger) (*App, error) {
 			MultiRowReplicas:  cfg.MultiRowReplicas,
 			Parasitizing:      cfg.Parasitizing.Enabled,
 			ParasitizingFiles: cfg.Parasitizing.Files,
+			Concurrency:       cfg.Concurrency,
 		},
 		Logger: log,
 	})

@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -267,6 +268,40 @@ func TestPipelineMaskerFallsBackOnCorruptedSentinels(t *testing.T) {
 	}
 	if !strings.Contains(got, "Hello there") {
 		t.Errorf("fallback lost the text: %q", got)
+	}
+}
+
+func TestPipelineConcurrentReplicas(t *testing.T) {
+	srcDir := t.TempDir()
+	var b strings.Builder
+	for i := 0; i < 200; i++ {
+		fmt.Fprintf(&b, "r%d\tword%d\n", i, i) // 200 single-row replicas
+	}
+	mustWrite(t, filepath.Join(srcDir, "d.txt"), b.String())
+
+	run := func(conc int) string {
+		out := filepath.Join(t.TempDir(), "out")
+		p, err := New(Deps{
+			Analyzer: wholeStringAnalyzer{}, Format: taggedTabFormat{},
+			Translator: prefixTranslator{}, Grouper: tagGrouper{},
+			Options: Options{
+				SourceFolder: srcDir, DestFolder: out,
+				SourceLang: "ru", TargetLang: "be", Delimiter: "\t",
+				MultiRowReplicas: true, Concurrency: conc,
+			},
+			Logger: discardLogger(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := p.Run(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		return mustRead(t, filepath.Join(out, "d.txt"))
+	}
+
+	if seq, par := run(1), run(8); seq != par {
+		t.Errorf("concurrency changed the output:\n seq: %q\n par: %q", seq, par)
 	}
 }
 

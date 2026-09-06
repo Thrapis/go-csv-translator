@@ -29,6 +29,13 @@ MAX_DECODING_LENGTH = 1024
 COMPUTE_TYPE = "int8"
 LENGTH_PENALTY = 1.1
 
+# CPU parallelism only - does NOT affect the translation output. INTER_THREADS
+# is how many requests run at once (pair with `concurrency` in the app config);
+# INTRA_THREADS is cores per request. Keep INTER * INTRA near the CPU thread
+# count (here 8).
+INTER_THREADS = 4
+INTRA_THREADS = 2
+
 langs = {}
 
 
@@ -37,7 +44,12 @@ def get_model(from_lang, to_lang):
     if key not in langs:
         path = f"./{key}/1"
         langs[key] = {
-            "translator": Translator(path, compute_type=COMPUTE_TYPE),
+            "translator": Translator(
+                path,
+                compute_type=COMPUTE_TYPE,
+                inter_threads=INTER_THREADS,
+                intra_threads=INTRA_THREADS,
+            ),
             "src": spm.SentencePieceProcessor(f"{path}/{from_lang}.spm.model"),
             "tgt": spm.SentencePieceProcessor(f"{path}/{to_lang}.spm.model"),
         }
