@@ -96,8 +96,13 @@ func (c *Config) Validate() error {
 		}
 	}
 	if c.Parasitizing.Enabled {
-		if len(c.Parasitizing.Files) == 0 {
-			return fmt.Errorf("parasitizing.files: at least one file is required when parasitizing.enabled is true")
+		if len(c.Parasitizing.Files) == 0 && len(c.Parasitizing.CarryOver) == 0 {
+			return fmt.Errorf("parasitizing: needs at least one carryOver or files entry when enabled")
+		}
+		for _, f := range c.Parasitizing.CarryOver {
+			if _, err := os.Stat(f); err != nil {
+				return fmt.Errorf("parasitizing.carryOver: %w", err)
+			}
 		}
 		for _, f := range c.Parasitizing.Files {
 			if _, err := os.Stat(f); err != nil {

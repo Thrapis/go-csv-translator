@@ -110,6 +110,9 @@ func loadTXTParasite(path string) (map[string]string, error) {
 				continue
 			}
 			v := strings.TrimPrefix(strings.TrimPrefix(l, ":"), " ")
+			if v == "" {
+				continue // an empty ": " line (e.g. a blanked replica row)
+			}
 			if b.Len() != 0 {
 				b.WriteByte(' ')
 			}

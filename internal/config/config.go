@@ -56,13 +56,22 @@ type Language struct {
 	Target string `yaml:"target"`
 }
 
-// Parasitizing seeds translation from existing human translation files instead
-// of the game's own source text. Files are consulted in order; the first with a
-// match for a replica wins, and anything still unmatched is machine-translated.
-// Requires a game that implements game.Parasitizer.
+// Parasitizing seeds translation from existing translation files instead of
+// machine-translating from scratch. Requires a game that implements
+// game.Parasitizer.
+//
+//   - CarryOver files are already in the target language. A replica whose id is
+//     found there is copied verbatim and never sent to the translator. Use a
+//     previous run's output to re-translate only what changed in a new version.
+//   - Files are in the source language and are still translated; they supply
+//     better source text than the game's own (e.g. a natural human phrasing).
+//
+// Both lists are consulted in order (CarryOver first). Anything unmatched is
+// machine-translated from the game's own source text.
 type Parasitizing struct {
-	Enabled bool     `yaml:"enabled"`
-	Files   []string `yaml:"files"`
+	Enabled   bool     `yaml:"enabled"`
+	CarryOver []string `yaml:"carryOver"`
+	Files     []string `yaml:"files"`
 }
 
 // Lingvanex configures both the translator backend and its process supervisor.

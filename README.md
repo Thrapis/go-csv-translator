@@ -36,7 +36,8 @@ documented inline in the examples; the essentials:
 | `translators` | ordered fallback chain, e.g. `[lingvanex, google]` |
 | `lingvanex.manage` | when true, start the Lingvanex server on launch and stop it on exit |
 | `multiRowReplicas` | translate consecutive same-tag rows as one sentence |
-| `parasitizing.files` | existing human translations (TXT or CSV), consulted in order; first match wins, the rest is machine-translated |
+| `parasitizing.carryOver` | target-language files (e.g. a previous run's output); a replica whose id matches is copied verbatim, never re-translated |
+| `parasitizing.files` | source-language translations (TXT or CSV); still translated, but a better source than the game's own. Checked after carryOver; first match wins, the rest is machine-translated |
 
 ### TCOAAL formats
 
@@ -63,6 +64,15 @@ very long replica can overflow a fixed box).
 
 Ctrl+C stops the run promptly; partial output is left on disk and a managed
 Lingvanex server is shut down.
+
+### Updating to a new game version
+
+Point `parasitizing.carryOver` at the previous version's output and run against
+the new source. Replica ids are stable across minor versions, and a changed
+source string gets a new id, so a matched id is copied verbatim and only the
+new / changed lines are translated — seconds instead of the full run. The
+`replicas` log line reports the split (`carried_over` / `from_parasite` /
+`machine_translated`).
 
 ## Lingvanex server
 

@@ -82,24 +82,37 @@ func (p *Pipeline) replicaSpans(lines []extract.DataLine) []span {
 	return groups
 }
 
-// translateReplicasBatched prepares every group's source string, translates them
-// all in batched requests, then writes each result back.
+// translateReplicasBatched resolves every group's text: a carry-over match is
+// used verbatim, otherwise the source string is collected and the batch is
+// translated. Each result is then written back.
 func (p *Pipeline) translateReplicasBatched(ctx context.Context, lines []extract.DataLine, groups []span) error {
-	totals := make([]string, len(groups))
-	fromParasite := 0
+	totals := make([]string, len(groups)) // source text to translate; "" if carried or empty
+	carried := make([]string, len(groups))
+	var nCarry, nParasite int
+
 	for k, g := range groups {
+		v, err := p.carryOver(lines, g)
+		if err != nil {
+			return err
+		}
+		if v != "" {
+			carried[k] = v
+			nCarry++
+			continue
+		}
 		t, para, err := p.replicaTotal(lines, g)
 		if err != nil {
 			return err
 		}
 		totals[k] = t
 		if para {
-			fromParasite++
+			nParasite++
 		}
 	}
 	if p.opts.Parasitizing {
 		p.log.Info("replicas", "total", len(groups),
-			"from_parasite", fromParasite, "machine_translated", len(groups)-fromParasite)
+			"carried_over", nCarry, "from_parasite", nParasite,
+			"machine_translated", len(groups)-nCarry-nParasite)
 	}
 
 	outs, err := p.translateManyMasked(ctx, totals)
@@ -108,10 +121,12 @@ func (p *Pipeline) translateReplicasBatched(ctx context.Context, lines []extract
 	}
 
 	for k, g := range groups {
-		if strings.TrimSpace(totals[k]) == "" {
-			continue
+		switch {
+		case carried[k] != "":
+			placeReplicaWhole(lines, g, carried[k])
+		case strings.TrimSpace(totals[k]) != "":
+			placeReplicaWhole(lines, g, outs[k])
 		}
-		placeReplicaWhole(lines, g, outs[k])
 	}
 	return nil
 }
@@ -161,6 +176,13 @@ func (p *Pipeline) translateReplicasPool(ctx context.Context, lines []extract.Da
 }
 
 func (p *Pipeline) translateReplicaGroup(ctx context.Context, lines []extract.DataLine, g span) error {
+	if v, err := p.carryOver(lines, g); err != nil {
+		return err
+	} else if v != "" {
+		placeReplicaWhole(lines, g, v)
+		return nil
+	}
+
 	total, _, err := p.replicaTotal(lines, g)
 	if err != nil {
 		return err
@@ -191,6 +213,22 @@ func (p *Pipeline) translateReplicaGroup(ctx context.Context, lines []extract.Da
 		lines[j].Value = parts[j-g.start-comp]
 	}
 	return nil
+}
+
+// carryOver returns a previous translation for the group's replica id from the
+// first carry-over file that has one, or "" if none do. The result is used
+// verbatim; it is never sent to the translator.
+func (p *Pipeline) carryOver(lines []extract.DataLine, g span) (string, error) {
+	for _, f := range p.opts.CarryOverFiles {
+		v, err := p.parasitizer.Replica(f, lines[g.start].Tag)
+		if err != nil {
+			return "", err
+		}
+		if strings.TrimSpace(v) != "" {
+			return v, nil
+		}
+	}
+	return "", nil
 }
 
 // replicaTotal is the source text for a group: the first parasite file with a

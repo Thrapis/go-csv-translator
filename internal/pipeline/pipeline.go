@@ -30,8 +30,9 @@ type Options struct {
 	MultiRowReplicas  bool
 	Parasitizing      bool
 	ParasitizingFiles []string
-	Concurrency       int // parallel translation batches; <=1 means sequential
-	BatchSize         int // strings per translator request; <1 means the default
+	CarryOverFiles    []string // target-language files whose matches are used verbatim
+	Concurrency       int      // parallel translation batches; <=1 means sequential
+	BatchSize         int      // strings per translator request; <1 means the default
 }
 
 // Pipeline holds everything one run needs. Build it with New.
@@ -68,7 +69,7 @@ func New(d Deps) (*Pipeline, error) {
 	case d.Logger == nil:
 		return nil, fmt.Errorf("pipeline: logger is required")
 	}
-	if d.Options.MultiRowReplicas && d.Options.Parasitizing && d.Parasitizer == nil {
+	if d.Options.MultiRowReplicas && (d.Options.Parasitizing || len(d.Options.CarryOverFiles) > 0) && d.Parasitizer == nil {
 		return nil, fmt.Errorf("pipeline: parasitizing enabled but game provides no parasitizer")
 	}
 	return &Pipeline{

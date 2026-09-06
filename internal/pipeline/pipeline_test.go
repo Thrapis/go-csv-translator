@@ -378,6 +378,52 @@ func TestPipelineBatchedMaskerDeterministic(t *testing.T) {
 	}
 }
 
+func TestPipelineCarryOverUsedVerbatim(t *testing.T) {
+	srcDir := t.TempDir()
+	dstDir := filepath.Join(t.TempDir(), "out")
+	// c1 was translated in a previous run; p1 is new.
+	mustWrite(t, filepath.Join(srcDir, "d.txt"), "c1\told line~M\np1\tnew line~M\n")
+
+	prev, srcParasite := "PREV", "SRC"
+	be := &batchEcho{}
+	p, err := New(Deps{
+		Analyzer:   maskAnalyzer{},
+		Format:     taggedTabFormat{},
+		Translator: be,
+		Grouper:    tagGrouper{},
+		Parasitizer: perFileParasitizer{
+			prev:        {"c1": "верш з мінулага"},
+			srcParasite: {"p1": "novaja krynica"},
+		},
+		Options: Options{
+			SourceFolder: srcDir, DestFolder: dstDir,
+			SourceLang: "ru", TargetLang: "be", Delimiter: "\t",
+			MultiRowReplicas:  true,
+			Parasitizing:      true,
+			CarryOverFiles:    []string{prev},
+			ParasitizingFiles: []string{srcParasite},
+		},
+		Logger: discardLogger(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	got := mustRead(t, filepath.Join(dstDir, "d.txt"))
+	if !strings.Contains(got, "c1\tверш з мінулага\n") {
+		t.Errorf("c1 not carried over verbatim: %q", got)
+	}
+	if !strings.Contains(got, "p1\tt:novaja krynica\n") { // translated from its source parasite
+		t.Errorf("p1 not translated: %q", got)
+	}
+	if be.batchedItems != 1 {
+		t.Errorf("carried replica should not be sent to the translator; batched %d items", be.batchedItems)
+	}
+}
+
 func TestPipelineMaskerPath(t *testing.T) {
 	srcDir := t.TempDir()
 	dstDir := filepath.Join(t.TempDir(), "out")

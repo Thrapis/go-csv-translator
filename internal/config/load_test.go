@@ -90,6 +90,41 @@ parasitizing:
 	}
 }
 
+func TestLoadCarryOverOnly(t *testing.T) {
+	// carryOver alone (no files) is valid when parasitizing is enabled.
+	path := writeConfig(t, `
+game: tcoaal
+destination:
+  folder: "out"
+language:
+  source: ru
+  target: be
+parasitizing:
+  enabled: true
+  carryOver: [%PARA%]
+`)
+	if _, err := Load(path); err != nil {
+		t.Fatalf("carryOver-only should be valid: %v", err)
+	}
+}
+
+func TestLoadCarryOverMissingFile(t *testing.T) {
+	path := writeConfig(t, `
+game: tcoaal
+destination:
+  folder: "out"
+language:
+  source: ru
+  target: be
+parasitizing:
+  enabled: true
+  carryOver: ["nope-missing.txt"]
+`)
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected error for missing carryOver file")
+	}
+}
+
 func TestLoadParasitizingMissingFile(t *testing.T) {
 	path := writeConfig(t, `
 game: tcoaal

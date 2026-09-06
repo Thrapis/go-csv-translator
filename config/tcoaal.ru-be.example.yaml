@@ -24,9 +24,16 @@ multiRowReplicas: true         # translate a multi-line replica as one sentence
 concurrency: 4                 # batches in flight (>= server INTER_THREADS); output is identical at any value
 
 parasitizing:
-  enabled: true                # reuse an existing human translation where available
-  # Consulted in order; first match wins, anything unmatched is machine
-  # translated. Both layouts work: a #id/": " TXT dump or a dialogue.csv.
+  enabled: true                # reuse existing translations where available
+  # carryOver: files already in the target language. A replica whose id is
+  # found here is copied verbatim, never re-translated - point this at a
+  # previous run's output to translate only what changed in a new game version.
+  carryOver:
+    - "C:/Localization/TCOAAL/BE - TXT/dialogue.txt"
+  # files: source-language translations. Still translated, but they give a
+  # better source than the game's English. First match wins across both lists
+  # (carryOver checked first); anything unmatched is machine-translated. A
+  # #id/": " TXT dump or a dialogue.csv both work.
   files:
     - "C:/Localization/TCOAAL/RU-TXT/dialogue.txt"
     - "C:/Localization/TCOAAL/RU-CSV/dialogue.csv"
