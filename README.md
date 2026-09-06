@@ -36,8 +36,13 @@ documented inline in the examples; the essentials:
 | `translators` | ordered fallback chain, e.g. `[lingvanex, google]` |
 | `lingvanex.manage` | when true, start the Lingvanex server on launch and stop it on exit |
 | `multiRowReplicas` | translate consecutive same-tag rows as one sentence |
-| `parasitizing.carryOver` | target-language files (e.g. a previous run's output); a replica whose id matches is copied verbatim, never re-translated |
+| `parasitizing.carryOver` | target-language files (e.g. a previous run's output); a matching entry is copied verbatim, never re-translated |
 | `parasitizing.files` | source-language translations (TXT or CSV); still translated, but a better source than the game's own. Checked after carryOver; first match wins, the rest is machine-translated |
+
+Both lists match a **dialogue** replica by its `#id` and a **LABELS / MENUS**
+entry by its section + key text (so `Save` in `LABELS` and in `MENUS` stay
+distinct). Everything a source parasite covers is translated with sentence
+context; everything carryOver covers is taken as-is.
 
 ### TCOAAL formats
 

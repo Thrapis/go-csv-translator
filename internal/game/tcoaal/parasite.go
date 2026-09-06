@@ -47,18 +47,18 @@ func (p *parasiteSource) load(path string) (map[string]string, error) {
 	return m, nil
 }
 
-// replica returns the human translation for the id portion of tag ("id" or
-// "#id" or "id,Source"), or "" when the file has no entry.
+// replica returns the translation for a row's lookup key (a bare id, "#id", or
+// "LABELS/<key>" / "MENUS/<key>"), or "" when the file has no entry.
 func (p *parasiteSource) replica(file, tag string) (string, error) {
 	m, err := p.load(file)
 	if err != nil {
 		return "", err
 	}
-	id := strings.TrimPrefix(strings.Split(tag, ",")[0], "#")
-	if id == "" {
+	key := strings.TrimPrefix(tag, "#")
+	if key == "" {
 		return "", nil
 	}
-	return m[id], nil
+	return m[key], nil
 }
 
 func loadCSVParasite(path string) (map[string]string, error) {
@@ -83,8 +83,25 @@ func loadTXTParasite(path string) (map[string]string, error) {
 	lines := strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n")
 
 	out := map[string]string{}
+	section := ""
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
+
+		if len(line) >= 2 && line[0] == '[' && line[len(line)-1] == ']' {
+			section = line[1 : len(line)-1]
+			continue
+		}
+		// LABELS / MENUS: "<key> : <value>" keyed by section + key.
+		if section == "LABELS" || section == "MENUS" {
+			if k, v, ok := strings.Cut(line, " : "); ok {
+				key := section + "/" + strings.TrimRight(k, " ")
+				if _, exists := out[key]; !exists {
+					out[key] = v
+				}
+			}
+			continue
+		}
+
 		if !strings.HasPrefix(line, "#") {
 			continue
 		}

@@ -74,6 +74,7 @@ func ParseDoc(r io.Reader) (*Doc, string, error) {
 	d := &Doc{lines: make([]string, len(rawLines))}
 
 	kind := kindMeta
+	section := ""
 	blockID := ""
 
 	for i, rl := range rawLines {
@@ -81,7 +82,7 @@ func ParseDoc(r io.Reader) (*Doc, string, error) {
 		d.lines[i] = line
 
 		if name, ok := bracketName(line); ok {
-			kind, blockID = kindOf(name), ""
+			kind, section, blockID = kindOf(name), name, ""
 			continue
 		}
 		if strings.TrimSpace(line) == "" {
@@ -92,8 +93,10 @@ func ParseDoc(r io.Reader) (*Doc, string, error) {
 		case kindKV:
 			if p := kvPrefix(line); p != "" {
 				tag := ""
-				if strings.HasPrefix(line, "#") { // SPEAKERS / ITEMS are id-keyed
+				if strings.HasPrefix(line, "#") { // SPEAKERS / ITEMS: id-keyed
 					tag = blockHeaderID(strings.TrimSuffix(p, " : "))
+				} else { // LABELS / MENUS: keyed by section + key text
+					tag = section + "/" + strings.TrimRight(strings.TrimSuffix(p, " : "), " ")
 				}
 				d.slots = append(d.slots, slot{line: i, prefix: p, tag: tag})
 			}

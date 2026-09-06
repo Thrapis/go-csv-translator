@@ -166,45 +166,57 @@ func (s section) idKeyed() bool {
 	}
 }
 
+// tagFor returns the parasite / carry-over lookup key for a row: the bare id for
+// id-keyed sections, "LABELS/<key>" or "MENUS/<key>" for the text-keyed ones,
+// and "" for metadata.
+func (s section) tagFor(col0 string) string {
+	switch {
+	case s.idKeyed():
+		return col0
+	case s == secLabels:
+		return "LABELS/" + col0
+	case s == secMenus:
+		return "MENUS/" + col0
+	default:
+		return ""
+	}
+}
+
 // lines returns one DataLine per translatable slot. The source column is always
 // the one immediately left of the translation column.
 func (d *Doc) lines() []extract.DataLine {
 	out := make([]extract.DataLine, len(d.slots))
 	for i, sl := range d.slots {
 		rec := d.records[sl.record]
-		tag := ""
-		if sl.sec.idKeyed() {
-			tag = rec[0] // dialogue: groups multi-row replicas; others: parasite lookup
-		}
 		out[i] = extract.DataLine{
 			Key:   strconv.Itoa(i),
 			Value: rec[sl.col-1],
-			Tag:   tag,
+			Tag:   sl.sec.tagFor(rec[0]),
 		}
 	}
 	return out
 }
 
-// TranslationsByID maps each id-keyed row id to its Translation column, joining
-// consecutive same-id rows (multi-row dialogue) with a space. Rows with an
-// empty translation cell are skipped. Used when this document is a parasite
-// source.
+// TranslationsByID maps each translatable row's lookup key (see section.tagFor)
+// to its Translation column, joining consecutive same-id dialogue rows with a
+// space. Rows with an empty translation cell are skipped. Used when this
+// document is a parasite / carry-over source.
 func (d *Doc) TranslationsByID() map[string]string {
 	out := map[string]string{}
 	for _, sl := range d.slots {
-		if !sl.sec.idKeyed() {
+		rec := d.records[sl.record]
+		key := sl.sec.tagFor(rec[0])
+		if key == "" {
 			continue
 		}
-		rec := d.records[sl.record]
 		tr := strings.TrimSpace(rec[sl.col])
 		if tr == "" {
 			continue
 		}
-		id := rec[0]
-		if prev, ok := out[id]; ok {
-			out[id] = prev + " " + tr
+		if prev, ok := out[key]; ok && sl.sec.idKeyed() {
+			out[key] = prev + " " + tr
 		} else {
-			out[id] = tr
+			out[key] = tr
 		}
 	}
 	return out

@@ -22,7 +22,7 @@ func TestParasiteReplica(t *testing.T) {
 
 	var src parasiteSource
 
-	got, err := src.replica(file, "abc123,SomeSource")
+	got, err := src.replica(file, "abc123")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestParasiteReplica(t *testing.T) {
 		t.Errorf("replica abc123 = %q, want %q", got, want)
 	}
 
-	got, err = src.replica(file, "def456,Other")
+	got, err = src.replica(file, "def456")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestParasiteReplica(t *testing.T) {
 
 	// An unknown id is not an error: the pipeline falls back to machine
 	// translation for replicas the parasite file does not cover.
-	got, err = src.replica(file, "missing,X")
+	got, err = src.replica(file, "missing")
 	if err != nil {
 		t.Errorf("unknown id returned error: %v", err)
 	}
@@ -74,6 +74,40 @@ func TestParasiteTXTInlineForm(t *testing.T) {
 	}
 }
 
+func TestParasiteLabelsMenus(t *testing.T) {
+	dir := t.TempDir()
+	txt := filepath.Join(dir, "loc.txt")
+	os.WriteFile(txt, []byte(
+		"[LABELS]\r\nGame : Гроб\r\nSave : Куды захаваць?\r\n\r\n"+
+			"[MENUS]\r\nNew Game    : Новая гульня\r\nSave        : Захаваць\r\n"), 0o644)
+
+	csv := filepath.Join(dir, "loc.csv")
+	os.WriteFile(csv, []byte(
+		"Labels,English,Translation,\r\nGame,The Coffin,Труна,\r\n"+
+			",,,\r\nMenus,Translation,,\r\nNew Game,Новая,,\r\n"), 0o644)
+
+	var src parasiteSource
+	for file, want := range map[string]map[string]string{
+		txt: {"LABELS/Game": "Гроб", "LABELS/Save": "Куды захаваць?",
+			"MENUS/New Game": "Новая гульня", "MENUS/Save": "Захаваць"},
+		csv: {"LABELS/Game": "Труна", "MENUS/New Game": "Новая"},
+	} {
+		for tag, w := range want {
+			got, err := src.replica(file, tag)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != w {
+				t.Errorf("%s %s = %q, want %q", filepath.Base(file), tag, got, w)
+			}
+		}
+	}
+	// LABELS/Save and MENUS/Save must not collide.
+	if v, _ := src.replica(txt, "MENUS/Save"); v == "Куды захаваць?" {
+		t.Error("LABELS/MENUS key collision")
+	}
+}
+
 func TestParasiteCSV(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "dialogue.csv")
@@ -92,7 +126,7 @@ func TestParasiteCSV(t *testing.T) {
 	if got, _ := src.replica(file, "#d1"); got != "частка адна частка два" {
 		t.Errorf("multi-row csv replica = %q", got)
 	}
-	if got, _ := src.replica(file, "sp1,Ashley"); got != "Эшли" {
+	if got, _ := src.replica(file, "sp1"); got != "Эшли" {
 		t.Errorf("csv speaker = %q", got)
 	}
 	if got, _ := src.replica(file, "nope"); got != "" {
@@ -108,7 +142,7 @@ func TestParasiteSourceCachesFile(t *testing.T) {
 	}
 
 	var src parasiteSource
-	if _, err := src.replica(file, "id1,S"); err != nil {
+	if _, err := src.replica(file, "id1"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -116,7 +150,7 @@ func TestParasiteSourceCachesFile(t *testing.T) {
 	if err := os.Remove(file); err != nil {
 		t.Fatal(err)
 	}
-	got, err := src.replica(file, "id1,S")
+	got, err := src.replica(file, "id1")
 	if err != nil {
 		t.Fatalf("expected cache hit, got error: %v", err)
 	}
