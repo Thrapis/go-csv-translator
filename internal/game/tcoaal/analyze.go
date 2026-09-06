@@ -1,7 +1,9 @@
 package tcoaal
 
 import (
+	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/Thrapis/go-csv-translator/internal/markup"
 )
@@ -107,4 +109,20 @@ func (analyzer) Render(ps *markup.PartialString) string {
 		b = append(b, p.Value...)
 	}
 	return string(b)
+}
+
+// Mask implements markup.Masker: text parts stay as-is, every symbol part
+// becomes a §i§ sentinel. Parts are flat here, so this is a single pass.
+func (analyzer) Mask(ps *markup.PartialString) (string, []string) {
+	var b strings.Builder
+	var markers []string
+	for _, p := range ps.Parts {
+		if p.Type == typeString {
+			b.WriteString(p.Value)
+			continue
+		}
+		fmt.Fprintf(&b, "§%d§", len(markers))
+		markers = append(markers, p.Value)
+	}
+	return b.String(), markers
 }

@@ -49,11 +49,13 @@ type Language struct {
 	Target string `yaml:"target"`
 }
 
-// Parasitizing pulls existing human translations from an external file instead
-// of machine-translating. Requires a game that implements game.Parasitizer.
+// Parasitizing seeds translation from existing human translation files instead
+// of the game's own source text. Files are consulted in order; the first with a
+// match for a replica wins, and anything still unmatched is machine-translated.
+// Requires a game that implements game.Parasitizer.
 type Parasitizing struct {
-	Enabled bool   `yaml:"enabled"`
-	File    string `yaml:"file"`
+	Enabled bool     `yaml:"enabled"`
+	Files   []string `yaml:"files"`
 }
 
 // Lingvanex configures both the translator backend and its process supervisor.

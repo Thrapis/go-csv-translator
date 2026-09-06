@@ -17,3 +17,13 @@ type Analyzer interface {
 	// Render reassembles a (possibly mutated) PartialString into a string.
 	Render(ps *PartialString) string
 }
+
+// Masker is an optional Analyzer capability. It renders the string with every
+// non-translatable part replaced by the sentinel §i§ (i = its position among
+// masked parts) and returns the removed substrings in order, so the whole
+// string can be translated in one piece and the markup spliced back with
+// Unmask. An Analyzer that implements Masker gets whole-string translation from
+// the pipeline; one that does not is translated fragment by fragment.
+type Masker interface {
+	Mask(ps *PartialString) (masked string, markers []string)
+}

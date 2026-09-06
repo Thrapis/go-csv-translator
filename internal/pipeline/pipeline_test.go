@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -161,35 +162,52 @@ func (taggedTabFormat) Compose(w io.Writer, lines []extract.DataLine, s *extract
 
 type tagGrouper struct{}
 
-func (tagGrouper) SameReplica(a, b extract.DataLine) bool { return a.Tag == b.Tag }
+// SameReplica mirrors the real tcoaal rule: empty tags never group.
+func (tagGrouper) SameReplica(a, b extract.DataLine) bool { return a.Tag != "" && a.Tag == b.Tag }
 
-type mapParasitizer map[string]string
+// perFileParasitizer maps file path -> (tag -> translation).
+type perFileParasitizer map[string]map[string]string
 
-func (m mapParasitizer) Replica(_ string, tag string) (string, error) { return m[tag], nil }
+func (m perFileParasitizer) Replica(file, tag string) (string, error) { return m[file][tag], nil }
 
-func TestPipelineParasitizingFallsBackToMT(t *testing.T) {
+// maskAnalyzer implements markup.Masker: a trailing "~<markup>" is masked as §0§.
+type maskAnalyzer struct{ wholeStringAnalyzer }
+
+func (maskAnalyzer) Mask(ps *markup.PartialString) (string, []string) {
+	text, marker, ok := strings.Cut(ps.Parts[0].Value, "~")
+	if !ok {
+		return ps.Parts[0].Value, nil
+	}
+	return text + "§0§", []string{marker}
+}
+
+func TestPipelineParasitizingMultiFileAndFallback(t *testing.T) {
 	srcDir := t.TempDir()
 	dstDir := filepath.Join(t.TempDir(), "out")
-	// p1: two rows, covered by the parasite file. p2: one row, not covered.
-	// z: trailing group so p2 is not last (see the known last-group bug).
+	// p1: covered by file B only. p2: covered by both -> A wins. p3: neither
+	// (and is last -> also checks the fixed last-group bug).
 	mustWrite(t, filepath.Join(srcDir, "d.txt"),
-		"p1\talpha\np1\tbeta\np2\tgamma\nz\tzzz\n")
+		"p1\talpha\np1\tbeta\np2\tgamma\np3\tdelta\n")
 
+	fileA, fileB := "A", "B"
 	p, err := New(Deps{
-		Analyzer:    wholeStringAnalyzer{},
-		Format:      taggedTabFormat{},
-		Translator:  prefixTranslator{},
-		Grouper:     tagGrouper{},
-		Parasitizer: mapParasitizer{"p1": "human one two"},
+		Analyzer:   wholeStringAnalyzer{},
+		Format:     taggedTabFormat{},
+		Translator: prefixTranslator{},
+		Grouper:    tagGrouper{},
+		Parasitizer: perFileParasitizer{
+			fileA: {"p2": "afromtwo"},
+			fileB: {"p1": "bfromone", "p2": "bfromtwo"},
+		},
 		Options: Options{
-			SourceFolder:     srcDir,
-			DestFolder:       dstDir,
-			SourceLang:       "ru",
-			TargetLang:       "be",
-			Delimiter:        "\t",
-			MultiRowReplicas: true,
-			Parasitizing:     true,
-			ParasitizingFile: "unused",
+			SourceFolder:      srcDir,
+			DestFolder:        dstDir,
+			SourceLang:        "ru",
+			TargetLang:        "be",
+			Delimiter:         "\t",
+			MultiRowReplicas:  true,
+			Parasitizing:      true,
+			ParasitizingFiles: []string{fileA, fileB},
 		},
 		Logger: discardLogger(),
 	})
@@ -201,14 +219,98 @@ func TestPipelineParasitizingFallsBackToMT(t *testing.T) {
 	}
 
 	got := mustRead(t, filepath.Join(dstDir, "d.txt"))
-	// p1 rows come from the parasite text ("human one two" translated, then
-	// split across the 2 rows); p2 falls back to MT of its own source "gamma".
-	// (translateParts lower-cases the first letter to match the source word.)
-	if !strings.Contains(got, "p1\tt:human") {
-		t.Errorf("p1 not sourced from parasite: %q", got)
+	if !strings.Contains(got, "bfromone") {
+		t.Errorf("p1 not sourced from file B: %q", got)
 	}
-	if !strings.Contains(got, "p2\tt:gamma") {
-		t.Errorf("p2 did not fall back to MT of source: %q", got)
+	if !strings.Contains(got, "afromtwo") || strings.Contains(got, "bfromtwo") {
+		t.Errorf("p2 should come from file A, not B: %q", got)
+	}
+	if !strings.Contains(got, "p3\tt:delta") {
+		t.Errorf("p3 not machine-translated (last-group bug?): %q", got)
+	}
+}
+
+// sentinelCorrupter echoes "T:"+text but strips digits from §i§ sentinels,
+// simulating a model that mangled them.
+type sentinelCorrupter struct{}
+
+func (sentinelCorrupter) Translate(_ context.Context, text, _, _ string) (string, error) {
+	return "T:" + regexpDigitsInSentinel.ReplaceAllString(text, "§§"), nil
+}
+
+var regexpDigitsInSentinel = regexp.MustCompile(`§\d+§`)
+
+func TestPipelineMaskerFallsBackOnCorruptedSentinels(t *testing.T) {
+	srcDir := t.TempDir()
+	dstDir := filepath.Join(t.TempDir(), "out")
+	mustWrite(t, filepath.Join(srcDir, "d.txt"), "a\tHello there~END\n")
+
+	p, err := New(Deps{
+		Analyzer:   maskAnalyzer{},
+		Format:     taggedTabFormat{},
+		Translator: sentinelCorrupter{},
+		Options: Options{
+			SourceFolder: srcDir, DestFolder: dstDir,
+			SourceLang: "en", TargetLang: "be", Delimiter: "\t",
+		},
+		Logger: discardLogger(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got := mustRead(t, filepath.Join(dstDir, "d.txt"))
+	if strings.Contains(got, "§") {
+		t.Errorf("corrupted sentinel leaked (no fallback?): %q", got)
+	}
+	if !strings.Contains(got, "Hello there") {
+		t.Errorf("fallback lost the text: %q", got)
+	}
+}
+
+func TestPipelineMaskerPath(t *testing.T) {
+	srcDir := t.TempDir()
+	dstDir := filepath.Join(t.TempDir(), "out")
+	mustWrite(t, filepath.Join(srcDir, "d.txt"),
+		"a\tHello there~\\c[0]\nb\tone\nb\ttwo\n")
+
+	p, err := New(Deps{
+		Analyzer:   maskAnalyzer{},
+		Format:     taggedTabFormat{},
+		Translator: prefixTranslator{}, // echoes "T:" + input, sentinels intact
+		Grouper:    tagGrouper{},
+		Options: Options{
+			SourceFolder:     srcDir,
+			DestFolder:       dstDir,
+			SourceLang:       "en",
+			TargetLang:       "be",
+			Delimiter:        "\t",
+			MultiRowReplicas: true,
+		},
+		Logger: discardLogger(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	got := mustRead(t, filepath.Join(dstDir, "d.txt"))
+	// row a: whole string translated once, marker \c[0] spliced back, no leftover §.
+	if !strings.Contains(got, "a\tT:Hello there\\c[0]\n") {
+		t.Errorf("row a masker output wrong: %q", got)
+	}
+	if strings.Contains(got, "§") {
+		t.Errorf("leftover sentinel in output: %q", got)
+	}
+	// replica b: whole translation on the first row, second row blanked.
+	// source "onetwo" is lower-case, so the translation's first letter is too.
+	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+	if len(lines) != 3 || lines[1] != "b\tt:onetwo" || lines[2] != "b\t" {
+		t.Errorf("replica not collapsed onto first row: %q", got)
 	}
 }
 

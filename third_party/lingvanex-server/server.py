@@ -17,13 +17,17 @@ for stream in (sys.stdout, sys.stderr):
 
 PORT = 8000
 
-# --- decoding options -------------------------------------------------------
-# beam_size: 1 = greedy (fastest), 4-5 = better wording at a few x the cost.
-# max_decoding_length: cap on output tokens; multi-row replicas are joined
-#   before translation so keep this well above a single line.
+# --- decoding options ------------------------------------------------------
+# For the ru->be pair (very close languages) the model is highly confident and
+# these barely move the output: int8 vs float32 and beam 2 vs 8 gave identical
+# results in testing. beam 4 is kept as cheap insurance for rare long inputs.
+# Accuracy comes from feeding real Russian (parasitizing) with full sentence
+# context, not from these knobs. Raise COMPUTE_TYPE to "float32" and BEAM_SIZE
+# to 8 if you switch to a more distant language pair.
 BEAM_SIZE = 4
-MAX_DECODING_LENGTH = 512
-COMPUTE_TYPE = "int8"  # int8 is the right trade-off on CPU; use "float32" on GPU
+MAX_DECODING_LENGTH = 1024
+COMPUTE_TYPE = "int8"
+LENGTH_PENALTY = 1.1
 
 langs = {}
 
@@ -49,6 +53,7 @@ def translate(from_lang, to_lang, text):
         tokens,
         batch_type="tokens",
         beam_size=BEAM_SIZE,
+        length_penalty=LENGTH_PENALTY,
         max_input_length=0,
         max_decoding_length=MAX_DECODING_LENGTH,
     )

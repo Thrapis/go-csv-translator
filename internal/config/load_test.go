@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -15,8 +16,13 @@ func writeConfig(t *testing.T, body string) string {
 	if err := os.MkdirAll(src, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	para := filepath.Join(dir, "d.txt")
+	if err := os.WriteFile(para, []byte("#x : y\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	path := filepath.Join(dir, "config.yaml")
-	body = "source:\n  folder: " + strconv.Quote(src) + "\n" + body
+	body = "source:\n  folder: " + strconv.Quote(src) + "\n" +
+		strings.ReplaceAll(body, "%PARA%", strconv.Quote(para))
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +39,7 @@ language:
   target: be
 parasitizing:
   enabled: true
-  file: "d.txt"
+  files: [%PARA%]
 lingvanex:
   healthTimeout: 45s
 `)
@@ -68,7 +74,7 @@ language:
 	}
 }
 
-func TestLoadParasitizingWithoutFile(t *testing.T) {
+func TestLoadParasitizingWithoutFiles(t *testing.T) {
 	path := writeConfig(t, `
 game: tcoaal
 destination:
@@ -80,7 +86,24 @@ parasitizing:
   enabled: true
 `)
 	if _, err := Load(path); err == nil {
-		t.Fatal("expected error: parasitizing.enabled without file")
+		t.Fatal("expected error: parasitizing.enabled without files")
+	}
+}
+
+func TestLoadParasitizingMissingFile(t *testing.T) {
+	path := writeConfig(t, `
+game: tcoaal
+destination:
+  folder: "out"
+language:
+  source: ru
+  target: be
+parasitizing:
+  enabled: true
+  files: ["nope-does-not-exist.txt"]
+`)
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected error for missing parasite file")
 	}
 }
 

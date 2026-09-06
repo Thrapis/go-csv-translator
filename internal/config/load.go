@@ -86,8 +86,15 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("source.files: invalid glob %q: %w", c.Source.Files, err)
 		}
 	}
-	if c.Parasitizing.Enabled && c.Parasitizing.File == "" {
-		return fmt.Errorf("parasitizing.file: required when parasitizing.enabled is true")
+	if c.Parasitizing.Enabled {
+		if len(c.Parasitizing.Files) == 0 {
+			return fmt.Errorf("parasitizing.files: at least one file is required when parasitizing.enabled is true")
+		}
+		for _, f := range c.Parasitizing.Files {
+			if _, err := os.Stat(f); err != nil {
+				return fmt.Errorf("parasitizing.files: %w", err)
+			}
+		}
 	}
 	if len(c.Translators) == 0 {
 		return fmt.Errorf("translators: at least one backend is required")

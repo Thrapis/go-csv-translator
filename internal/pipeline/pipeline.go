@@ -19,17 +19,17 @@ import (
 
 // Options are the per-run knobs, mapped from config by internal/app.
 type Options struct {
-	SourceFolder     string
-	DestFolder       string
-	FileGlob         string // base-name glob; "" means every file
-	FolderNameMap    map[string]string
-	SourceLang       string
-	TargetLang       string
-	Delimiter        string
-	SkipFirstLine    bool
-	MultiRowReplicas bool
-	Parasitizing     bool
-	ParasitizingFile string
+	SourceFolder      string
+	DestFolder        string
+	FileGlob          string // base-name glob; "" means every file
+	FolderNameMap     map[string]string
+	SourceLang        string
+	TargetLang        string
+	Delimiter         string
+	SkipFirstLine     bool
+	MultiRowReplicas  bool
+	Parasitizing      bool
+	ParasitizingFiles []string
 }
 
 // Pipeline holds everything one run needs. Build it with New.

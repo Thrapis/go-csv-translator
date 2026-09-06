@@ -24,9 +24,11 @@ multiRowReplicas: true         # translate a multi-line replica as one sentence
 
 parasitizing:
   enabled: true                # reuse an existing human translation where available
-  # A #id / ": " dump (the TXT layout), e.g. an existing Russian localization.
-  # Replicas whose id is missing there fall back to machine translation.
-  file: "C:/Localization/TCOAAL/RU-TXT/dialogue.txt"
+  # Consulted in order; first match wins, anything unmatched is machine
+  # translated. Both layouts work: a #id/": " TXT dump or a dialogue.csv.
+  files:
+    - "C:/Localization/TCOAAL/RU-TXT/dialogue.txt"
+    - "C:/Localization/TCOAAL/RU-CSV/dialogue.csv"
 
 translators:                   # tried in order; google is the fallback
   - lingvanex

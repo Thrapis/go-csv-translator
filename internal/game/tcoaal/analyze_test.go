@@ -3,6 +3,8 @@ package tcoaal
 import (
 	"strings"
 	"testing"
+
+	"github.com/Thrapis/go-csv-translator/internal/markup"
 )
 
 func TestAnalyzeRoundTrip(t *testing.T) {
@@ -20,6 +22,41 @@ func TestAnalyzeRoundTrip(t *testing.T) {
 		if got := a.Render(a.Analyze(in)); got != in {
 			t.Errorf("round trip mismatch\n in: %q\nout: %q", in, got)
 		}
+	}
+}
+
+func TestMaskUnmaskRoundTrip(t *testing.T) {
+	a := analyzer{}
+	cases := []string{
+		"Just plain text.",
+		`\c[2]Ashley\c[0]: hello there`,
+		`He said "get out" and left.`,
+		"Wait... what?!",
+		`\fiItalic\fr and (parenthetical) text`,
+		"",
+	}
+	for _, in := range cases {
+		ps := a.Analyze(in)
+		masked, markers := a.Mask(ps)
+		if strings.Contains(masked, in) && strings.ContainsAny(in, `\"()`) {
+			t.Errorf("Mask did not remove markup from %q: %q", in, masked)
+		}
+		if got := markup.Unmask(masked, markers); got != a.Render(ps) {
+			t.Errorf("Unmask(Mask(%q)) = %q, want %q", in, got, a.Render(ps))
+		}
+	}
+}
+
+func TestMaskSplicesTranslation(t *testing.T) {
+	a := analyzer{}
+	ps := a.Analyze(`\c[2]Andy\c[0]: "hello world"`)
+	masked, markers := a.Mask(ps)
+	if masked != `§0§Andy§1§: §2§hello world§3§` {
+		t.Fatalf("masked = %q", masked)
+	}
+	got := markup.Unmask("§0§Эндзі§1§: §2§прывітанне§3§", markers)
+	if got != `\c[2]Эндзі\c[0]: "прывітанне"` {
+		t.Errorf("spliced = %q", got)
 	}
 }
 

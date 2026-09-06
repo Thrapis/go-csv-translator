@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/Thrapis/go-csv-translator/internal/extract"
 	"github.com/Thrapis/go-csv-translator/internal/markup"
@@ -16,11 +17,10 @@ func (p *Pipeline) translateRows(ctx context.Context, lines []extract.DataLine) 
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		ps := p.analyzer.Analyze(lines[i].Value)
-		if err := p.translateParts(ctx, ps); err != nil {
+		translated, err := p.translateString(ctx, p.analyzer.Analyze(lines[i].Value))
+		if err != nil {
 			return err
 		}
-		translated := p.analyzer.Render(ps)
 		p.log.Info("translated row",
 			"progress", fmt.Sprintf("%d/%d", i+1, len(lines)),
 			"from", truncate(lines[i].Value), "to", truncate(translated))
@@ -29,31 +29,26 @@ func (p *Pipeline) translateRows(ctx context.Context, lines []extract.DataLine) 
 	return nil
 }
 
-// translateReplicas groups consecutive rows that share a replica tag, translates
-// each group as one sentence, then redistributes the result across the group's
-// non-empty rows.
-//
-// BUG(pre-existing): the loop control mirrors the original implementation, which
-// never processes the final replica group in a file. Preserved deliberately so
-// this refactor does not change output; fix separately.
+// translateReplicas groups consecutive rows that share a replica tag and
+// translates each group as one unit. Rows with no tag (header sections) are
+// each their own group.
 func (p *Pipeline) translateReplicas(ctx context.Context, lines []extract.DataLine) error {
 	if p.grouper == nil {
 		return p.translateRows(ctx, lines)
 	}
-
-	start := 0
-	for i := range lines {
-		if start == i && i != len(lines)-1 {
-			continue
-		}
-		if start != i && p.grouper.SameReplica(lines[start], lines[i]) {
-			continue
-		}
-		end := i - 1
-		if err := p.translateReplicaGroup(ctx, lines, start, end); err != nil {
+	i := 0
+	for i < len(lines) {
+		if err := ctx.Err(); err != nil {
 			return err
 		}
-		start = end + 1
+		j := i + 1
+		for j < len(lines) && p.grouper.SameReplica(lines[i], lines[j]) {
+			j++
+		}
+		if err := p.translateReplicaGroup(ctx, lines, i, j-1); err != nil {
+			return err
+		}
+		i = j
 	}
 	return nil
 }
@@ -61,11 +56,16 @@ func (p *Pipeline) translateReplicas(ctx context.Context, lines []extract.DataLi
 func (p *Pipeline) translateReplicaGroup(ctx context.Context, lines []extract.DataLine, start, end int) error {
 	var total string
 	if p.opts.Parasitizing {
-		v, err := p.parasitizer.Replica(p.opts.ParasitizingFile, lines[start].Tag)
-		if err != nil {
-			return err
+		for _, f := range p.opts.ParasitizingFiles {
+			v, err := p.parasitizer.Replica(f, lines[start].Tag)
+			if err != nil {
+				return err
+			}
+			if strings.TrimSpace(v) != "" {
+				total = v
+				break
+			}
 		}
-		total = v // may be "" when the replica id is not in the parasite file
 	}
 	if strings.TrimSpace(total) == "" {
 		// Not parasitizing, or no parasite match: translate the source rows.
@@ -79,23 +79,38 @@ func (p *Pipeline) translateReplicaGroup(ctx context.Context, lines []extract.Da
 		return nil
 	}
 
+	translated, err := p.translateString(ctx, p.analyzer.Analyze(total))
+	if err != nil {
+		return err
+	}
+
+	p.log.Info("translated replica",
+		"rows", fmt.Sprintf("%d-%d", start, end),
+		"from", truncate(lines[start].Value), "to", truncate(translated))
+
+	if _, ok := p.analyzer.(markup.Masker); ok {
+		// Whole translation on the first non-empty row; blank the rest.
+		first := true
+		for j := start; j <= end; j++ {
+			if strings.TrimSpace(lines[j].Value) == "" {
+				continue
+			}
+			if first {
+				lines[j].Value, first = translated, false
+			} else {
+				lines[j].Value = ""
+			}
+		}
+		return nil
+	}
+
+	// Fragment path: keep the row count, split the translation by word count.
 	filled := 0
 	for j := start; j <= end; j++ {
 		if strings.TrimSpace(lines[j].Value) != "" {
 			filled++
 		}
 	}
-
-	ps := p.analyzer.Analyze(total)
-	if err := p.translateParts(ctx, ps); err != nil {
-		return err
-	}
-	translated := p.analyzer.Render(ps)
-
-	p.log.Info("translated replica",
-		"rows", fmt.Sprintf("%d-%d", start, end),
-		"from", truncate(lines[start].Value), "to", truncate(translated))
-
 	parts := splitSentence(translated, filled)
 	comp := 0
 	for j := start; j <= end; j++ {
@@ -108,8 +123,51 @@ func (p *Pipeline) translateReplicaGroup(ctx context.Context, lines []extract.Da
 	return nil
 }
 
+// translateString translates one analyzed string and returns the rendered
+// result. When the analyzer supports masking the whole string goes to the
+// translator in one request with markup replaced by §i§ sentinels; otherwise
+// each free-text fragment is translated on its own.
+func (p *Pipeline) translateString(ctx context.Context, ps *markup.PartialString) (string, error) {
+	masker, ok := p.analyzer.(markup.Masker)
+	if !ok {
+		if err := p.translateParts(ctx, ps); err != nil {
+			return "", err
+		}
+		return p.analyzer.Render(ps), nil
+	}
+
+	masked, markers := masker.Mask(ps)
+	bare := strings.TrimSpace(markup.StripSentinels(masked))
+	if bare == "" {
+		return p.analyzer.Render(ps), nil // markup only, nothing to translate
+	}
+
+	trimmed := strings.TrimSpace(masked)
+	lead := textutil.CountLeadingSpaces(masked)
+	trail := textutil.CountFinalSpaces(masked)
+
+	out, err := p.translator.Translate(ctx, trimmed, p.opts.SourceLang, p.opts.TargetLang)
+	if err != nil {
+		return "", fmt.Errorf("translate %q: %w", truncate(trimmed), err)
+	}
+
+	if len(markers) > 0 && !markup.SentinelsIntact(out, len(markers)) {
+		// The translator corrupted a sentinel; fall back to translating each
+		// free-text fragment on its own (ps is still un-mutated here).
+		if err := p.translateParts(ctx, ps); err != nil {
+			return "", err
+		}
+		return p.analyzer.Render(ps), nil
+	}
+
+	out = markup.Unmask(out, markers)
+	out = caseFirstLetter(out, firstLetterUpper(bare))
+	return strings.Repeat(" ", lead) + out + strings.Repeat(" ", trail), nil
+}
+
 // translateParts translates every free-text part of ps in place, preserving each
-// part's leading/trailing spaces and the case of its first letter.
+// part's leading/trailing spaces and the case of its first letter. Used only for
+// analyzers that do not implement markup.Masker.
 func (p *Pipeline) translateParts(ctx context.Context, ps *markup.PartialString) error {
 	for _, part := range p.analyzer.Translatable(ps) {
 		trimmed := strings.TrimSpace(part.Value)
@@ -128,6 +186,31 @@ func (p *Pipeline) translateParts(ctx context.Context, ps *markup.PartialString)
 		part.Value = strings.Repeat(" ", lead) + out + strings.Repeat(" ", trail)
 	}
 	return nil
+}
+
+func firstLetterUpper(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) {
+			return unicode.IsUpper(r)
+		}
+	}
+	return false
+}
+
+// caseFirstLetter adjusts the case of the first Unicode letter in s (skipping
+// any leading markup), leaving everything else untouched.
+func caseFirstLetter(s string, upper bool) string {
+	for i, r := range s {
+		if !unicode.IsLetter(r) {
+			continue
+		}
+		c := unicode.ToLower(r)
+		if upper {
+			c = unicode.ToUpper(r)
+		}
+		return s[:i] + string(c) + s[i+len(string(r)):]
+	}
+	return s
 }
 
 func applyFirstCase(s string, upper bool) string {

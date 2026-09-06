@@ -154,6 +154,18 @@ func subHeaderOf(rec []string) (section, bool) {
 	return s, ok
 }
 
+// idKeyed reports whether a section's rows are addressed by the row id in
+// column 0 (dialogue, speakers, items, descriptions) rather than by English key
+// text (labels, menus).
+func (s section) idKeyed() bool {
+	switch s {
+	case secDialogue, secSpeakers, secItems, secDescriptions:
+		return true
+	default:
+		return false
+	}
+}
+
 // lines returns one DataLine per translatable slot. The source column is always
 // the one immediately left of the translation column.
 func (d *Doc) lines() []extract.DataLine {
@@ -161,13 +173,38 @@ func (d *Doc) lines() []extract.DataLine {
 	for i, sl := range d.slots {
 		rec := d.records[sl.record]
 		tag := ""
-		if sl.sec == secDialogue {
-			tag = rec[0] // multi-row replicas share the ID
+		if sl.sec.idKeyed() {
+			tag = rec[0] // dialogue: groups multi-row replicas; others: parasite lookup
 		}
 		out[i] = extract.DataLine{
 			Key:   strconv.Itoa(i),
 			Value: rec[sl.col-1],
 			Tag:   tag,
+		}
+	}
+	return out
+}
+
+// TranslationsByID maps each id-keyed row id to its Translation column, joining
+// consecutive same-id rows (multi-row dialogue) with a space. Rows with an
+// empty translation cell are skipped. Used when this document is a parasite
+// source.
+func (d *Doc) TranslationsByID() map[string]string {
+	out := map[string]string{}
+	for _, sl := range d.slots {
+		if !sl.sec.idKeyed() {
+			continue
+		}
+		rec := d.records[sl.record]
+		tr := strings.TrimSpace(rec[sl.col])
+		if tr == "" {
+			continue
+		}
+		id := rec[0]
+		if prev, ok := out[id]; ok {
+			out[id] = prev + " " + tr
+		} else {
+			out[id] = tr
 		}
 	}
 	return out

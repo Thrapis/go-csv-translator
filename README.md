@@ -36,7 +36,7 @@ documented inline in the examples; the essentials:
 | `translators` | ordered fallback chain, e.g. `[lingvanex, google]` |
 | `lingvanex.manage` | when true, start the Lingvanex server on launch and stop it on exit |
 | `multiRowReplicas` | translate consecutive same-tag rows as one sentence |
-| `parasitizing` | reuse an existing human translation file instead of MT (falls back to MT for uncovered ids) |
+| `parasitizing.files` | existing human translations (TXT or CSV), consulted in order; first match wins, the rest is machine-translated |
 
 ### TCOAAL formats
 
@@ -53,6 +53,13 @@ Both read and write the combined file directly (no split/merge step). The
 metadata sections (VERSION/LANGUAGE/FONT/CREDITS) pass through untouched; the
 rest — menu labels, speaker/item names, descriptions and all dialogue — is
 translated in place, and every non-translated byte is preserved.
+
+Each string is translated **whole**: engine markup (`\c[2]`, `\fi`, quotes,
+`...`) is swapped for `§i§` sentinels, the whole line goes to the translator in
+one request, and the markup is spliced back — so the model sees full sentences,
+not fragments. A multi-row replica is translated as one unit and the result is
+placed on its first row with the rest blanked (RPG-Maker boxes re-wrap, but a
+very long replica can overflow a fixed box).
 
 Ctrl+C stops the run promptly; partial output is left on disk and a managed
 Lingvanex server is shut down.

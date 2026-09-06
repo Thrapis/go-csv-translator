@@ -125,6 +125,43 @@ func TestRegistered(t *testing.T) {
 	}
 }
 
+func TestTranslationsByID(t *testing.T) {
+	// A parasite-style document: Translation column filled.
+	const src = "Version,,,\r\n" +
+		",,,\r\n" +
+		"Labels,English,Translation,\r\n" +
+		"Game,The Coffin,Гроб,\r\n" +
+		",,,\r\n" +
+		"Speakers,English,Translation,\r\n" +
+		"sp1,Ashley,Эшли,\r\n" +
+		",,,\r\n" +
+		",,,\r\n" +
+		"Section,Map001.json,,\r\n" +
+		"ID,Source,English,Translation\r\n" +
+		"a1,Narrator,line one ,радок адзін \r\n" +
+		"a1,Narrator,line two,радок два\r\n" +
+		"a2,Andrew,Nice.,Файна.\r\n"
+
+	d, err := ParseDoc(strings.NewReader(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := d.TranslationsByID()
+
+	if m["a1"] != "радок адзін радок два" {
+		t.Errorf("multi-row join: %q", m["a1"])
+	}
+	if m["a2"] != "Файна." {
+		t.Errorf("a2: %q", m["a2"])
+	}
+	if m["sp1"] != "Эшли" {
+		t.Errorf("speaker: %q", m["sp1"])
+	}
+	if _, ok := m["Game"]; ok {
+		t.Errorf("Labels rows (text-keyed) must be excluded, got %q", m["Game"])
+	}
+}
+
 func TestSectionsAndRecords(t *testing.T) {
 	d, err := ParseDoc(strings.NewReader(fixture))
 	if err != nil {
