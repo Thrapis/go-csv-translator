@@ -1,0 +1,198 @@
+// Package tcoaaltxt implements the "The Coffin of Andy and Leyley" combined
+// export TXT (dialogue.txt). It registers as "tcoaal-txt".
+//
+// The file is UTF-8, CRLF, organised as "[SECTION]" blocks. VERSION / LANGUAGE
+// / FONT / CREDITS are metadata and pass through untouched. LABELS / MENUS /
+// SPEAKERS / ITEMS are "key : value" lines. DESCRIPTIONS, CHOICES and every
+// "[MapNNN.json]" section use block form: a "#id (Speaker)" header followed by
+// one or more ": value" lines (consecutive value lines under one id form a
+// multi-row replica). Only the value after " : " / ": " is translated; keys,
+// ids, headers, blank lines and metadata are emitted verbatim.
+package tcoaaltxt
+
+import (
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/Thrapis/go-csv-translator/internal/extract"
+)
+
+const (
+	crlf    = "\r\n"
+	utf8BOM = "\xef\xbb\xbf"
+)
+
+func init() {
+	extract.Register("tcoaal-txt", func() extract.Format { return format{} })
+}
+
+type sectionKind int
+
+const (
+	kindMeta  sectionKind = iota // VERSION / LANGUAGE / FONT / CREDITS
+	kindKV                       // LABELS / MENUS / SPEAKERS / ITEMS
+	kindBlock                    // DESCRIPTIONS / CHOICES / *.json
+)
+
+func kindOf(name string) sectionKind {
+	switch name {
+	case "VERSION", "LANGUAGE", "FONT", "CREDITS":
+		return kindMeta
+	case "LABELS", "MENUS", "SPEAKERS", "ITEMS":
+		return kindKV
+	default:
+		return kindBlock
+	}
+}
+
+// Doc is a parsed dialogue.txt: every line verbatim, plus the translatable slots.
+type Doc struct {
+	lines []string
+	slots []slot
+}
+
+type slot struct {
+	line   int
+	prefix string // value == lines[line][len(prefix):]
+	tag    string // replica id, for grouping consecutive value lines
+}
+
+// ParseDoc reads a combined dialogue.txt and reports the newline it uses.
+func ParseDoc(r io.Reader) (*Doc, string, error) {
+	raw, err := io.ReadAll(r)
+	if err != nil {
+		return nil, "", err
+	}
+	text := strings.TrimPrefix(string(raw), utf8BOM)
+	nl := "\n"
+	if strings.Contains(text, crlf) {
+		nl = crlf
+	}
+
+	rawLines := strings.Split(text, "\n")
+	d := &Doc{lines: make([]string, len(rawLines))}
+
+	kind := kindMeta
+	blockID := ""
+
+	for i, rl := range rawLines {
+		line := strings.TrimSuffix(rl, "\r")
+		d.lines[i] = line
+
+		if name, ok := bracketName(line); ok {
+			kind, blockID = kindOf(name), ""
+			continue
+		}
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		switch kind {
+		case kindKV:
+			if p := kvPrefix(line); p != "" {
+				tag := ""
+				if strings.HasPrefix(line, "#") { // SPEAKERS / ITEMS are id-keyed
+					tag = blockHeaderID(strings.TrimSuffix(p, " : "))
+				}
+				d.slots = append(d.slots, slot{line: i, prefix: p, tag: tag})
+			}
+		case kindBlock:
+			switch {
+			case strings.HasPrefix(line, "#"):
+				if p, id := inlineEntry(line); p != "" {
+					d.slots = append(d.slots, slot{line: i, prefix: p, tag: id})
+				} else {
+					blockID = blockHeaderID(line)
+				}
+			case strings.HasPrefix(line, ":"):
+				p := ":"
+				if strings.HasPrefix(line, ": ") {
+					p = ": "
+				}
+				d.slots = append(d.slots, slot{line: i, prefix: p, tag: blockID})
+			}
+		}
+	}
+	return d, nl, nil
+}
+
+func bracketName(line string) (string, bool) {
+	if len(line) >= 2 && line[0] == '[' && line[len(line)-1] == ']' {
+		return line[1 : len(line)-1], true
+	}
+	return "", false
+}
+
+// kvPrefix returns the text up to and including the first " : " separator.
+func kvPrefix(line string) string {
+	if i := strings.Index(line, " : "); i >= 0 {
+		return line[:i+3]
+	}
+	return ""
+}
+
+// inlineEntry handles a "#id : value" line (a choice): it returns prefix
+// "#id : " and "#id". A "#id (Speaker)" block header returns "".
+func inlineEntry(line string) (prefix, id string) {
+	i := strings.Index(line, " : ")
+	if i < 0 || strings.Contains(line[:i], " (") {
+		return "", ""
+	}
+	return line[:i+3], line[:i]
+}
+
+// blockHeaderID extracts "#id" from a "#id (Speaker)" header line.
+func blockHeaderID(line string) string {
+	if i := strings.IndexByte(line, ' '); i >= 0 {
+		return line[:i]
+	}
+	return line
+}
+
+func (d *Doc) lineData() []extract.DataLine {
+	out := make([]extract.DataLine, len(d.slots))
+	for i, sl := range d.slots {
+		out[i] = extract.DataLine{
+			Key:   fmt.Sprintf("%d", i),
+			Value: d.lines[sl.line][len(sl.prefix):],
+			Tag:   sl.tag,
+		}
+	}
+	return out
+}
+
+// Write serialises the document with the given newline.
+func (d *Doc) Write(w io.Writer, nl string) error {
+	_, err := io.WriteString(w, strings.Join(d.lines, nl))
+	return err
+}
+
+type format struct{}
+
+func (format) Extract(r io.Reader, _ string) ([]extract.DataLine, *extract.Settings, error) {
+	d, nl, err := ParseDoc(r)
+	if err != nil {
+		return nil, nil, err
+	}
+	return d.lineData(), &extract.Settings{LineDelimiter: nl, Extra: d}, nil
+}
+
+func (format) Compose(w io.Writer, lines []extract.DataLine, s *extract.Settings, _ string) error {
+	d, ok := s.Extra.(*Doc)
+	if !ok || d == nil {
+		return fmt.Errorf("tcoaal txt: compose without a parsed document")
+	}
+	if len(lines) != len(d.slots) {
+		return fmt.Errorf("tcoaal txt: got %d lines, document has %d translatable slots", len(lines), len(d.slots))
+	}
+	nl := s.LineDelimiter
+	if nl == "" {
+		nl = crlf
+	}
+	for i, l := range lines {
+		sl := d.slots[i]
+		d.lines[sl.line] = sl.prefix + l.Value
+	}
+	return d.Write(w, nl)
+}

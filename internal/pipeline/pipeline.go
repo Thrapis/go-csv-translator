@@ -21,6 +21,7 @@ import (
 type Options struct {
 	SourceFolder     string
 	DestFolder       string
+	FileGlob         string // base-name glob; "" means every file
 	FolderNameMap    map[string]string
 	SourceLang       string
 	TargetLang       string
@@ -98,6 +99,9 @@ func (p *Pipeline) translateFolder(ctx context.Context, src *node, dst string) e
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if !p.matchesGlob(f.name) {
+			continue
+		}
 		if err := p.translateFile(ctx, f, dst); err != nil {
 			return fmt.Errorf("%s: %w", f.path, err)
 		}
@@ -114,6 +118,14 @@ func (p *Pipeline) translateFolder(ctx context.Context, src *node, dst string) e
 		}
 	}
 	return nil
+}
+
+func (p *Pipeline) matchesGlob(name string) bool {
+	if p.opts.FileGlob == "" {
+		return true
+	}
+	ok, _ := filepath.Match(p.opts.FileGlob, name)
+	return ok
 }
 
 func (p *Pipeline) translateFile(ctx context.Context, f fileRef, dstDir string) error {

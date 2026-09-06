@@ -8,7 +8,6 @@ import (
 	"log/slog"
 
 	"github.com/Thrapis/go-csv-translator/internal/config"
-	"github.com/Thrapis/go-csv-translator/internal/csvtool"
 	"github.com/Thrapis/go-csv-translator/internal/extract"
 	"github.com/Thrapis/go-csv-translator/internal/game"
 	"github.com/Thrapis/go-csv-translator/internal/pipeline"
@@ -68,6 +67,7 @@ func New(cfg *config.Config, log *slog.Logger) (*App, error) {
 		Options: pipeline.Options{
 			SourceFolder:     cfg.Source.Folder,
 			DestFolder:       cfg.Destination.Folder,
+			FileGlob:         cfg.Source.Files,
 			FolderNameMap:    cfg.Destination.FolderNameMap,
 			SourceLang:       cfg.Language.Source,
 			TargetLang:       cfg.Language.Target,
@@ -91,16 +91,7 @@ func New(cfg *config.Config, log *slog.Logger) (*App, error) {
 	return &App{cfg: cfg, log: log, pipe: pipe}, nil
 }
 
-// Run executes the pipeline and, if configured, the post-merge step.
+// Run executes the pipeline.
 func (a *App) Run(ctx context.Context) error {
-	if err := a.pipe.Run(ctx); err != nil {
-		return err
-	}
-	if a.cfg.PostMerge.Enabled {
-		a.log.Info("merging translated files", "output", a.cfg.PostMerge.OutputFile)
-		if err := csvtool.Merge(a.cfg.Destination.Folder, a.cfg.PostMerge.OutputFile); err != nil {
-			return fmt.Errorf("post-merge: %w", err)
-		}
-	}
-	return nil
+	return a.pipe.Run(ctx)
 }

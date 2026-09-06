@@ -38,8 +38,14 @@ func TestParasiteReplica(t *testing.T) {
 		t.Errorf("replica def456 = %q, want %q", got, want)
 	}
 
-	if _, err := src.replica(file, "missing,X"); err == nil {
-		t.Error("expected error for unknown replica id")
+	// An unknown id is not an error: the pipeline falls back to machine
+	// translation for replicas the parasite file does not cover.
+	got, err = src.replica(file, "missing,X")
+	if err != nil {
+		t.Errorf("unknown id returned error: %v", err)
+	}
+	if got != "" {
+		t.Errorf("unknown id returned %q, want empty", got)
 	}
 }
 

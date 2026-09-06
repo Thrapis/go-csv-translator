@@ -135,6 +135,83 @@ func TestPipelineStopsOnCancelledContext(t *testing.T) {
 	}
 }
 
+// taggedTabFormat reads/writes "tag\tvalue" lines, exposing tag as DataLine.Tag.
+type taggedTabFormat struct{}
+
+func (taggedTabFormat) Extract(r io.Reader, _ string) ([]extract.DataLine, *extract.Settings, error) {
+	b, _ := io.ReadAll(r)
+	var lines []extract.DataLine
+	for _, ln := range strings.Split(strings.TrimRight(string(b), "\n"), "\n") {
+		if ln == "" {
+			continue
+		}
+		tag, v, _ := strings.Cut(ln, "\t")
+		lines = append(lines, extract.DataLine{Key: tag, Value: v, Tag: tag})
+	}
+	return lines, &extract.Settings{LineDelimiter: "\n"}, nil
+}
+func (taggedTabFormat) Compose(w io.Writer, lines []extract.DataLine, s *extract.Settings, _ string) error {
+	var b strings.Builder
+	for _, l := range lines {
+		b.WriteString(l.Key + "\t" + l.Value + s.LineDelimiter)
+	}
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+type tagGrouper struct{}
+
+func (tagGrouper) SameReplica(a, b extract.DataLine) bool { return a.Tag == b.Tag }
+
+type mapParasitizer map[string]string
+
+func (m mapParasitizer) Replica(_ string, tag string) (string, error) { return m[tag], nil }
+
+func TestPipelineParasitizingFallsBackToMT(t *testing.T) {
+	srcDir := t.TempDir()
+	dstDir := filepath.Join(t.TempDir(), "out")
+	// p1: two rows, covered by the parasite file. p2: one row, not covered.
+	// z: trailing group so p2 is not last (see the known last-group bug).
+	mustWrite(t, filepath.Join(srcDir, "d.txt"),
+		"p1\talpha\np1\tbeta\np2\tgamma\nz\tzzz\n")
+
+	p, err := New(Deps{
+		Analyzer:    wholeStringAnalyzer{},
+		Format:      taggedTabFormat{},
+		Translator:  prefixTranslator{},
+		Grouper:     tagGrouper{},
+		Parasitizer: mapParasitizer{"p1": "human one two"},
+		Options: Options{
+			SourceFolder:     srcDir,
+			DestFolder:       dstDir,
+			SourceLang:       "ru",
+			TargetLang:       "be",
+			Delimiter:        "\t",
+			MultiRowReplicas: true,
+			Parasitizing:     true,
+			ParasitizingFile: "unused",
+		},
+		Logger: discardLogger(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	got := mustRead(t, filepath.Join(dstDir, "d.txt"))
+	// p1 rows come from the parasite text ("human one two" translated, then
+	// split across the 2 rows); p2 falls back to MT of its own source "gamma".
+	// (translateParts lower-cases the first letter to match the source word.)
+	if !strings.Contains(got, "p1\tt:human") {
+		t.Errorf("p1 not sourced from parasite: %q", got)
+	}
+	if !strings.Contains(got, "p2\tt:gamma") {
+		t.Errorf("p2 did not fall back to MT of source: %q", got)
+	}
+}
+
 func mustWrite(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {

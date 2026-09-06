@@ -5,10 +5,13 @@
 game: tcoaal
 
 source:
-  folder: "C:/Localization/TCOAAL/split"
-  format: tcoaal-csv          # optional; this is the tcoaal default anyway
+  # The whole tree under folder is walked; `files` restricts it to the dialogue
+  # file so font/ and img/ assets in the export are left alone.
+  folder: "C:/Localization/TCOAAL/EN-CSV"
+  format: tcoaal-csv          # tcoaal-csv (default) or tcoaal-txt
+  files: "dialogue.*"         # base-name glob; omit to translate every file
 destination:
-  folder: "C:/Localization/TCOAAL/translated"
+  folder: "C:/Localization/TCOAAL/BE-CSV"
   folderNameMap:
     ru: be                    # rename any sub-folder called "ru" to "be" on output
 
@@ -16,29 +19,26 @@ language:
   source: ru
   target: be
 
-delimiter: ","                # optional; tcoaal default
 skipFirstLine: false
-multiRowReplicas: true
+multiRowReplicas: true         # translate a multi-line replica as one sentence
 
 parasitizing:
-  enabled: true               # pull existing human lines instead of MT where available
-  file: "C:/Localization/TCOAAL/dialogue.txt"
+  enabled: true                # reuse an existing human translation where available
+  # A #id / ": " dump (the TXT layout), e.g. an existing Russian localization.
+  # Replicas whose id is missing there fall back to machine translation.
+  file: "C:/Localization/TCOAAL/RU-TXT/dialogue.txt"
 
-translators:                  # tried in order; google is the fallback
+translators:                   # tried in order; google is the fallback
   - lingvanex
   - google
 
 lingvanex:
-  manage: true                # start the python server on launch, stop it on exit
+  manage: true                 # start the python server on launch, stop it on exit
   address: 127.0.0.1
   port: 8000
   workdir: third_party/lingvanex-server
   command: [py, ./server.py]
   healthTimeout: 30s
   stopTimeout: 10s
-
-postMerge:
-  enabled: true
-  outputFile: "C:/Localization/TCOAAL/t-belarusian.csv"
 
 logLevel: info

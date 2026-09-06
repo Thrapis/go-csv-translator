@@ -6,6 +6,7 @@ package plugins
 import (
 	_ "github.com/Thrapis/go-csv-translator/internal/extract/delimited"
 	_ "github.com/Thrapis/go-csv-translator/internal/extract/tcoaalcsv"
+	_ "github.com/Thrapis/go-csv-translator/internal/extract/tcoaaltxt"
 	_ "github.com/Thrapis/go-csv-translator/internal/game/taleworld"
 	_ "github.com/Thrapis/go-csv-translator/internal/game/tcoaal"
 	_ "github.com/Thrapis/go-csv-translator/internal/game/titanquest"

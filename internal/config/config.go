@@ -23,7 +23,6 @@ type Config struct {
 	Parasitizing Parasitizing `yaml:"parasitizing"`
 	Translators  []string     `yaml:"translators"`
 	Lingvanex    Lingvanex    `yaml:"lingvanex"`
-	PostMerge    PostMerge    `yaml:"postMerge"`
 
 	LogLevel string `yaml:"logLevel"`
 }
@@ -32,6 +31,9 @@ type Config struct {
 type Source struct {
 	Folder string `yaml:"folder"`
 	Format string `yaml:"format"` // extract format id; empty => game default
+	// Files is an optional shell glob matched against each file's base name
+	// (e.g. "dialogue.*"). Empty means every file in the tree is translated.
+	Files string `yaml:"files"`
 }
 
 // Destination describes the output tree.
@@ -63,12 +65,6 @@ type Lingvanex struct {
 	Command       []string `yaml:"command"`
 	HealthTimeout Duration `yaml:"healthTimeout"`
 	StopTimeout   Duration `yaml:"stopTimeout"`
-}
-
-// PostMerge optionally stitches the destination tree back into one CSV.
-type PostMerge struct {
-	Enabled    bool   `yaml:"enabled"`
-	OutputFile string `yaml:"outputFile"`
 }
 
 // Duration unmarshals a Go duration string ("30s", "2m") from YAML.

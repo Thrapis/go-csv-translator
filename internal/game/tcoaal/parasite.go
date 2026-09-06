@@ -40,10 +40,14 @@ func (p *parasiteSource) replica(file, tag string) (string, error) {
 		return "", err
 	}
 
-	id := "#" + strings.Split(tag, ",")[0]
+	// Tags arrive as a bare id (CSV format) or "#id" (TXT format); the parasite
+	// file keys replicas as "#id".
+	id := "#" + strings.TrimPrefix(strings.Split(tag, ",")[0], "#")
 	start := strings.Index(data, id)
 	if start < 0 {
-		return "", fmt.Errorf("parasite file has no replica %q", id)
+		// Version drift between the source and the parasite file leaves some
+		// ids unmatched; the pipeline falls back to machine translation.
+		return "", nil
 	}
 
 	end := len(data)

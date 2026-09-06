@@ -25,10 +25,16 @@ type DataLine struct {
 }
 
 // Settings carries per-file decisions an Extractor made that Compose must honour
-// to round-trip the file (its text encoding and line terminator).
+// to round-trip the file (its text encoding and line terminator), plus an
+// optional format-private payload.
 type Settings struct {
 	Encoding      encoding.Encoding
 	LineDelimiter string
+
+	// Extra is opaque data an Extractor may hand to its own Composer, e.g. the
+	// structural skeleton of a document whose translatable cells were returned
+	// as DataLines. Formats that do not need it leave it nil.
+	Extra any
 }
 
 // Extractor parses a source file into rows.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -78,11 +79,13 @@ func (c *Config) Validate() error {
 	} else if !info.IsDir() {
 		return fmt.Errorf("source.folder %q: not a directory", c.Source.Folder)
 	}
+	if c.Source.Files != "" {
+		if _, err := filepath.Match(c.Source.Files, "x"); err != nil {
+			return fmt.Errorf("source.files: invalid glob %q: %w", c.Source.Files, err)
+		}
+	}
 	if c.Parasitizing.Enabled && c.Parasitizing.File == "" {
 		return fmt.Errorf("parasitizing.file: required when parasitizing.enabled is true")
-	}
-	if c.PostMerge.Enabled && c.PostMerge.OutputFile == "" {
-		return fmt.Errorf("postMerge.outputFile: required when postMerge.enabled is true")
 	}
 	if len(c.Translators) == 0 {
 		return fmt.Errorf("translators: at least one backend is required")

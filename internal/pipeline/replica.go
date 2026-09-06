@@ -65,8 +65,10 @@ func (p *Pipeline) translateReplicaGroup(ctx context.Context, lines []extract.Da
 		if err != nil {
 			return err
 		}
-		total = v
-	} else {
+		total = v // may be "" when the replica id is not in the parasite file
+	}
+	if strings.TrimSpace(total) == "" {
+		// Not parasitizing, or no parasite match: translate the source rows.
 		var b strings.Builder
 		for j := start; j <= end; j++ {
 			b.WriteString(lines[j].Value)

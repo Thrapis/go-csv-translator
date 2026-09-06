@@ -1,10 +1,13 @@
 // Package tcoaal supports "The Coffin of Andy and Leyley" (RPG Maker MV/MZ
-// export CSV, backslash escape markup).
+// combined export, backslash escape markup). Its localization ships in two
+// interchangeable layouts, format ids "tcoaal-csv" and "tcoaal-txt"; pick one
+// with source.format in config (default: tcoaal-csv).
 package tcoaal
 
 import (
 	"github.com/Thrapis/go-csv-translator/internal/extract"
 	_ "github.com/Thrapis/go-csv-translator/internal/extract/tcoaalcsv" // register "tcoaal-csv"
+	_ "github.com/Thrapis/go-csv-translator/internal/extract/tcoaaltxt" // register "tcoaal-txt"
 	"github.com/Thrapis/go-csv-translator/internal/game"
 	"github.com/Thrapis/go-csv-translator/internal/markup"
 )
