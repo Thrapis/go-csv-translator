@@ -1,0 +1,55 @@
+package tcoaal
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestAnalyzeRoundTrip(t *testing.T) {
+	a := analyzer{}
+	cases := []string{
+		"Just plain text.",
+		`\c[2]Ashley\c[0]: hello there`,
+		`He said "get out" and left.`,
+		"Wait... what?!",
+		"............................I see you found the batteries.",
+		`\fiItalic\fr and (parenthetical) text`,
+		"",
+	}
+	for _, in := range cases {
+		if got := a.Render(a.Analyze(in)); got != in {
+			t.Errorf("round trip mismatch\n in: %q\nout: %q", in, got)
+		}
+	}
+}
+
+func TestTranslatableOnlyText(t *testing.T) {
+	a := analyzer{}
+	ps := a.Analyze(`\c[2]Andy\c[0]: "Leave me alone."`)
+	got := a.Translatable(ps)
+	if len(got) == 0 {
+		t.Fatal("expected at least one translatable part")
+	}
+	for _, p := range got {
+		if p.Type != typeString {
+			t.Errorf("translatable part has non-string type %d (%q)", p.Type, p.Value)
+		}
+	}
+}
+
+func TestTranslateSubstitutionKeepsSymbols(t *testing.T) {
+	a := analyzer{}
+	ps := a.Analyze(`\c[2]Andy\c[0]: hello world`)
+	for _, p := range a.Translatable(ps) {
+		p.Value = strings.Replace(p.Value, strings.TrimSpace(p.Value), "XXX", 1)
+	}
+	got := a.Render(ps)
+	for _, sym := range []string{`\c[2]`, `\c[0]`, "XXX"} {
+		if !strings.Contains(got, sym) {
+			t.Errorf("expected %q to survive translation, got %q", sym, got)
+		}
+	}
+	if strings.Contains(got, "hello") {
+		t.Errorf("source text leaked into output: %q", got)
+	}
+}

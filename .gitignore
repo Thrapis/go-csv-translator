@@ -21,7 +21,11 @@
 # Dependency directories (remove the comment below to include it)
 vendor/
 
-# Application
-lingvanex-server/*
-!lingvanex-server/*.py
-!lingvanex-server/*.bat
+# Lingvanex server: keep the python/bat, ignore the downloaded model files
+third_party/lingvanex-server/*
+!third_party/lingvanex-server/*.py
+!third_party/lingvanex-server/*.bat
+
+# Local run configs (keep the checked-in *.example.yaml templates)
+/config/*.yaml
+!/config/*.example.yaml

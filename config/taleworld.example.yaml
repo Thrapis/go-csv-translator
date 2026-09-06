@@ -1,0 +1,28 @@
+# Mount & Blade II: Bannerlord — English -> Belarusian.
+
+game: taleworld
+
+source:
+  folder: "C:/Localization/Bannerlord/en"
+  # format omitted -> "delimited" (key|value lines)
+destination:
+  folder: "C:/Localization/Bannerlord/be"
+  folderNameMap:
+    en: be
+
+language:
+  source: en
+  target: be
+
+delimiter: "|"
+skipFirstLine: false
+multiRowReplicas: false
+
+translators:
+  - lingvanex
+  - google
+
+lingvanex:
+  manage: true
+
+logLevel: info

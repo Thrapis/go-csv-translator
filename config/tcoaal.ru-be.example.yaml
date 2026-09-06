@@ -1,0 +1,44 @@
+# The Coffin of Andy and Leyley — Russian -> Belarusian.
+# Copy this file to config/tcoaal.ru-be.yaml (gitignored) and edit the paths,
+# then run:  gametranslator -config config/tcoaal.ru-be.yaml
+
+game: tcoaal
+
+source:
+  folder: "C:/Localization/TCOAAL/split"
+  format: tcoaal-csv          # optional; this is the tcoaal default anyway
+destination:
+  folder: "C:/Localization/TCOAAL/translated"
+  folderNameMap:
+    ru: be                    # rename any sub-folder called "ru" to "be" on output
+
+language:
+  source: ru
+  target: be
+
+delimiter: ","                # optional; tcoaal default
+skipFirstLine: false
+multiRowReplicas: true
+
+parasitizing:
+  enabled: true               # pull existing human lines instead of MT where available
+  file: "C:/Localization/TCOAAL/dialogue.txt"
+
+translators:                  # tried in order; google is the fallback
+  - lingvanex
+  - google
+
+lingvanex:
+  manage: true                # start the python server on launch, stop it on exit
+  address: 127.0.0.1
+  port: 8000
+  workdir: third_party/lingvanex-server
+  command: [py, ./server.py]
+  healthTimeout: 30s
+  stopTimeout: 10s
+
+postMerge:
+  enabled: true
+  outputFile: "C:/Localization/TCOAAL/t-belarusian.csv"
+
+logLevel: info
