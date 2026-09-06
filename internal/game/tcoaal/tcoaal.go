@@ -27,8 +27,11 @@ func (*Game) DefaultFormat() string     { return "tcoaal-csv" }
 func (*Game) DefaultDelimiter() string  { return "," }
 func (*Game) Analyzer() markup.Analyzer { return analyzer{} }
 
-// SameReplica groups rows sharing an ID+Source tag.
-func (*Game) SameReplica(a, b extract.DataLine) bool { return a.Tag == b.Tag }
+// SameReplica groups rows sharing a non-empty replica id. Header-section rows
+// (Labels/Menus/...) carry no tag and are each their own unit.
+func (*Game) SameReplica(a, b extract.DataLine) bool {
+	return a.Tag != "" && a.Tag == b.Tag
+}
 
 // Replica returns the pre-existing human translation for tag from file.
 func (g *Game) Replica(file, tag string) (string, error) {

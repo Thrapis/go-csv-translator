@@ -14,6 +14,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"os"
 	"os/exec"
 	"time"
 
@@ -58,6 +59,9 @@ func (s *Server) Start(ctx context.Context) error {
 
 	cmd := exec.Command(s.cfg.Command[0], s.cfg.Command[1:]...)
 	cmd.Dir = s.cfg.Workdir
+	// Force UTF-8 I/O in the child: its stdout is a pipe here, which defaults to
+	// the locale codec on Windows and crashes when it prints a non-Latin line.
+	cmd.Env = append(os.Environ(), "PYTHONUTF8=1", "PYTHONIOENCODING=utf-8")
 	configureProcAttr(cmd)
 
 	stdout, err := cmd.StdoutPipe()

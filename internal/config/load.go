@@ -53,7 +53,9 @@ func (c *Config) applyDefaults() {
 		c.Lingvanex.Workdir = "third_party/lingvanex-server"
 	}
 	if c.Lingvanex.HealthTimeout == 0 {
-		c.Lingvanex.HealthTimeout = Duration(30 * time.Second)
+		// The Python server's ctranslate2 / sentencepiece imports take ~15-20s
+		// before the port opens.
+		c.Lingvanex.HealthTimeout = Duration(90 * time.Second)
 	}
 	if c.Lingvanex.StopTimeout == 0 {
 		c.Lingvanex.StopTimeout = Duration(10 * time.Second)
