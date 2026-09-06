@@ -40,6 +40,9 @@ func (c *Config) applyDefaults() {
 	if c.Concurrency < 1 {
 		c.Concurrency = 1
 	}
+	if c.BatchSize < 1 {
+		c.BatchSize = 64
+	}
 	if len(c.Translators) == 0 {
 		c.Translators = []string{"lingvanex", "google"}
 	}
@@ -62,6 +65,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Lingvanex.StopTimeout == 0 {
 		c.Lingvanex.StopTimeout = Duration(10 * time.Second)
+	}
+	if c.Lingvanex.RequestTimeout == 0 {
+		c.Lingvanex.RequestTimeout = Duration(5 * time.Minute)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"time"
 )
 
 // Translator turns text in language from into language to.
@@ -44,6 +45,9 @@ type Options struct {
 	// LingvanexAddress and LingvanexPort locate the local Lingvanex server.
 	LingvanexAddress string
 	LingvanexPort    int
+	// RequestTimeout bounds one HTTP request to a backend. A large batch can
+	// legitimately take a while; 0 means the backend's default.
+	RequestTimeout time.Duration
 }
 
 // Factory builds one backend instance.

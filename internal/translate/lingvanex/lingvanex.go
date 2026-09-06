@@ -25,9 +25,13 @@ func init() {
 		if port == 0 {
 			port = 8000
 		}
+		timeout := opts.RequestTimeout
+		if timeout <= 0 {
+			timeout = 5 * time.Minute
+		}
 		return &Client{
 			baseURL: fmt.Sprintf("http://%s:%d", addr, port),
-			http:    &http.Client{Timeout: 60 * time.Second},
+			http:    &http.Client{Timeout: timeout},
 		}, nil
 	})
 }

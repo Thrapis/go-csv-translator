@@ -48,6 +48,7 @@ func New(cfg *config.Config, log *slog.Logger) (*App, error) {
 	translator, err := translate.Build(cfg.Translators, translate.Options{
 		LingvanexAddress: cfg.Lingvanex.Address,
 		LingvanexPort:    cfg.Lingvanex.Port,
+		RequestTimeout:   cfg.Lingvanex.RequestTimeout.Duration(),
 	}, log)
 	if err != nil {
 		return nil, err
@@ -78,6 +79,7 @@ func New(cfg *config.Config, log *slog.Logger) (*App, error) {
 			Parasitizing:      cfg.Parasitizing.Enabled,
 			ParasitizingFiles: cfg.Parasitizing.Files,
 			Concurrency:       cfg.Concurrency,
+			BatchSize:         cfg.BatchSize,
 		},
 		Logger: log,
 	})

@@ -15,8 +15,8 @@ import (
 	"github.com/Thrapis/go-csv-translator/internal/translate"
 )
 
-// batchSize is how many strings go to the translator in one request.
-const batchSize = 256
+// defaultBatchSize is used when Options.BatchSize is unset.
+const defaultBatchSize = 64
 
 // span is a half-open... actually inclusive [start, end] row range for one replica.
 type span struct{ start, end int }
@@ -301,9 +301,13 @@ func (p *Pipeline) translateBatch(ctx context.Context, texts []string) ([]string
 		return out, nil
 	}
 
+	size := p.opts.BatchSize
+	if size < 1 {
+		size = defaultBatchSize
+	}
 	var chunks []span
-	for lo := 0; lo < len(texts); lo += batchSize {
-		hi := lo + batchSize
+	for lo := 0; lo < len(texts); lo += size {
+		hi := lo + size
 		if hi > len(texts) {
 			hi = len(texts)
 		}

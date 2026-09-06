@@ -19,10 +19,13 @@ type Config struct {
 	Delimiter        string `yaml:"delimiter"`
 	SkipFirstLine    bool   `yaml:"skipFirstLine"`
 	MultiRowReplicas bool   `yaml:"multiRowReplicas"`
-	// Concurrency is how many replicas to translate in parallel (default 1).
-	// It only affects speed, never the output. Pair it with INTER_THREADS in
-	// the Lingvanex server and keep the product near your CPU thread count.
+	// Concurrency is how many translation batches to run at once (default 1).
+	// Keep it <= the server's INTER_THREADS or requests queue past the timeout.
+	// It only affects speed, never the output.
 	Concurrency int `yaml:"concurrency"`
+	// BatchSize is how many strings go to the translator per request
+	// (default 64). Smaller = more requests but each finishes sooner.
+	BatchSize int `yaml:"batchSize"`
 
 	Parasitizing Parasitizing `yaml:"parasitizing"`
 	Translators  []string     `yaml:"translators"`
@@ -64,13 +67,14 @@ type Parasitizing struct {
 
 // Lingvanex configures both the translator backend and its process supervisor.
 type Lingvanex struct {
-	Manage        bool     `yaml:"manage"`
-	Address       string   `yaml:"address"`
-	Port          int      `yaml:"port"`
-	Workdir       string   `yaml:"workdir"`
-	Command       []string `yaml:"command"`
-	HealthTimeout Duration `yaml:"healthTimeout"`
-	StopTimeout   Duration `yaml:"stopTimeout"`
+	Manage         bool     `yaml:"manage"`
+	Address        string   `yaml:"address"`
+	Port           int      `yaml:"port"`
+	Workdir        string   `yaml:"workdir"`
+	Command        []string `yaml:"command"`
+	HealthTimeout  Duration `yaml:"healthTimeout"`
+	StopTimeout    Duration `yaml:"stopTimeout"`
+	RequestTimeout Duration `yaml:"requestTimeout"` // per HTTP request; default 5m
 }
 
 // Duration unmarshals a Go duration string ("30s", "2m") from YAML.
