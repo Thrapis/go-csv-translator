@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Thrapis/go-csv-translator/internal/extract"
@@ -302,6 +303,78 @@ func TestPipelineConcurrentReplicas(t *testing.T) {
 
 	if seq, par := run(1), run(8); seq != par {
 		t.Errorf("concurrency changed the output:\n seq: %q\n par: %q", seq, par)
+	}
+}
+
+// batchEcho implements translate.BatchTranslator; counts single vs batch calls.
+type batchEcho struct {
+	mu           sync.Mutex
+	singleCalls  int
+	batchCalls   int
+	batchedItems int
+}
+
+func (b *batchEcho) Translate(_ context.Context, text, _, _ string) (string, error) {
+	b.mu.Lock()
+	b.singleCalls++
+	b.mu.Unlock()
+	return "T:" + text, nil
+}
+func (b *batchEcho) TranslateBatch(_ context.Context, texts []string, _, _ string) ([]string, error) {
+	b.mu.Lock()
+	b.batchCalls++
+	b.batchedItems += len(texts)
+	b.mu.Unlock()
+	out := make([]string, len(texts))
+	for i, s := range texts {
+		out[i] = "T:" + s
+	}
+	return out, nil
+}
+
+func TestPipelineBatchedMaskerDeterministic(t *testing.T) {
+	srcDir := t.TempDir()
+	var body strings.Builder
+	for i := 0; i < 700; i++ { // > 2 chunks of 256
+		fmt.Fprintf(&body, "r%d\tline %d here~M%d\n", i, i, i)
+	}
+	mustWrite(t, filepath.Join(srcDir, "d.txt"), body.String())
+
+	run := func(conc int) (string, *batchEcho) {
+		out := filepath.Join(t.TempDir(), "out")
+		be := &batchEcho{}
+		p, err := New(Deps{
+			Analyzer: maskAnalyzer{}, Format: taggedTabFormat{},
+			Translator: be, Grouper: tagGrouper{},
+			Options: Options{
+				SourceFolder: srcDir, DestFolder: out,
+				SourceLang: "ru", TargetLang: "be", Delimiter: "\t",
+				MultiRowReplicas: true, Concurrency: conc,
+			},
+			Logger: discardLogger(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := p.Run(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		return mustRead(t, filepath.Join(out, "d.txt")), be
+	}
+
+	seq, be1 := run(1)
+	par, be8 := run(8)
+	if seq != par {
+		t.Errorf("concurrency changed batched output")
+	}
+	if be1.batchCalls == 0 || be1.singleCalls != 0 {
+		t.Errorf("expected batched calls only, got batch=%d single=%d", be1.batchCalls, be1.singleCalls)
+	}
+	if be1.batchedItems != 700 || be8.batchedItems != 700 {
+		t.Errorf("batched item count: seq=%d par=%d, want 700", be1.batchedItems, be8.batchedItems)
+	}
+	if be8.batchCalls < 3 { // 700 items / 256 => 3 chunks
+		t.Errorf("expected >=3 chunks, got %d", be8.batchCalls)
 	}
 }
 

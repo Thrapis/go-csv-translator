@@ -33,8 +33,8 @@ LENGTH_PENALTY = 1.1
 # is how many requests run at once (pair with `concurrency` in the app config);
 # INTRA_THREADS is cores per request. Keep INTER * INTRA near the CPU thread
 # count (here 8).
-INTER_THREADS = 4
-INTRA_THREADS = 2
+INTER_THREADS = 2
+INTRA_THREADS = 4
 
 langs = {}
 

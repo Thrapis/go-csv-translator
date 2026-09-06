@@ -33,3 +33,21 @@ func (c *Chain) Translate(ctx context.Context, text, from, to string) (string, e
 	}
 	return "", fmt.Errorf("all %d translator backends failed, last error: %w", len(c.backends), err)
 }
+
+// TranslateBatch tries each backend in order (via Batch, so a non-batch backend
+// still works), returning the first success.
+func (c *Chain) TranslateBatch(ctx context.Context, texts []string, from, to string) ([]string, error) {
+	var err error
+	for i, b := range c.backends {
+		var out []string
+		out, err = Batch(ctx, b, texts, from, to)
+		if err == nil {
+			return out, nil
+		}
+		if c.log != nil {
+			c.log.Warn("translator backend batch failed, falling back",
+				"position", i+1, "of", len(c.backends), "error", err)
+		}
+	}
+	return nil, fmt.Errorf("all %d translator backends failed, last error: %w", len(c.backends), err)
+}

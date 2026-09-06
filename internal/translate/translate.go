@@ -15,6 +15,29 @@ type Translator interface {
 	Translate(ctx context.Context, text, from, to string) (string, error)
 }
 
+// BatchTranslator is an optional Translator capability: translating many
+// strings in one call. Use the Batch helper, which falls back to a loop for
+// backends that do not implement it.
+type BatchTranslator interface {
+	TranslateBatch(ctx context.Context, texts []string, from, to string) ([]string, error)
+}
+
+// Batch translates texts in order, using t's batch method when it has one.
+func Batch(ctx context.Context, t Translator, texts []string, from, to string) ([]string, error) {
+	if bt, ok := t.(BatchTranslator); ok {
+		return bt.TranslateBatch(ctx, texts, from, to)
+	}
+	out := make([]string, len(texts))
+	for i, s := range texts {
+		v, err := t.Translate(ctx, s, from, to)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = v
+	}
+	return out, nil
+}
+
 // Options are the backend-agnostic knobs a Factory may need. It deliberately
 // does not depend on the config package so backends stay decoupled from it.
 type Options struct {

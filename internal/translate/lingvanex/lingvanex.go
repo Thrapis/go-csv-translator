@@ -4,12 +4,12 @@
 package lingvanex
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Thrapis/go-csv-translator/internal/translate"
@@ -39,8 +39,34 @@ type Client struct {
 }
 
 func (c *Client) Translate(ctx context.Context, text, from, to string) (string, error) {
+	return c.post(ctx, from, to, text)
+}
+
+// TranslateBatch sends all texts in one request (newline-delimited; the server
+// translates each line and returns them the same way).
+func (c *Client) TranslateBatch(ctx context.Context, texts []string, from, to string) ([]string, error) {
+	if len(texts) == 0 {
+		return nil, nil
+	}
+	for i, t := range texts {
+		if strings.ContainsAny(t, "\r\n") {
+			texts[i] = strings.NewReplacer("\r", " ", "\n", " ").Replace(t)
+		}
+	}
+	body, err := c.post(ctx, from, to, strings.Join(texts, "\n"))
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(body, "\n")
+	if len(lines) != len(texts) {
+		return nil, fmt.Errorf("lingvanex: sent %d lines, got %d back", len(texts), len(lines))
+	}
+	return lines, nil
+}
+
+func (c *Client) post(ctx context.Context, from, to, payload string) (string, error) {
 	url := fmt.Sprintf("%s?from=%s&to=%s", c.baseURL, from, to)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader([]byte(text)))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(payload))
 	if err != nil {
 		return "", err
 	}

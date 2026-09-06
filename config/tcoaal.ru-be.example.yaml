@@ -21,7 +21,7 @@ language:
 
 skipFirstLine: false
 multiRowReplicas: true         # translate a multi-line replica as one sentence
-concurrency: 4                 # parallel translation requests (~= server INTER_THREADS); output is identical
+concurrency: 4                 # batches in flight (>= server INTER_THREADS); output is identical at any value
 
 parasitizing:
   enabled: true                # reuse an existing human translation where available

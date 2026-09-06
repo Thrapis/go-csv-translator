@@ -10,36 +10,64 @@ import (
 	"github.com/Thrapis/go-csv-translator/internal/extract"
 	"github.com/Thrapis/go-csv-translator/internal/markup"
 	"github.com/Thrapis/go-csv-translator/internal/textutil"
+	"github.com/Thrapis/go-csv-translator/internal/translate"
 )
 
-// translateRows translates each row independently.
+// batchSize is how many strings go to the translator in one request.
+const batchSize = 256
+
+// span is a half-open... actually inclusive [start, end] row range for one replica.
+type span struct{ start, end int }
+
+// translateRows translates each row independently. Masker analyzers go through a
+// single batched pass; others fall back to one request per row.
 func (p *Pipeline) translateRows(ctx context.Context, lines []extract.DataLine) error {
+	if _, ok := p.analyzer.(markup.Masker); !ok {
+		for i := range lines {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			out, err := p.translateString(ctx, p.analyzer.Analyze(lines[i].Value))
+			if err != nil {
+				return err
+			}
+			lines[i].Value = out
+		}
+		return nil
+	}
+
+	sources := make([]string, len(lines))
 	for i := range lines {
-		if err := ctx.Err(); err != nil {
-			return err
+		sources[i] = lines[i].Value
+	}
+	outs, err := p.translateManyMasked(ctx, sources)
+	if err != nil {
+		return err
+	}
+	for i := range lines {
+		if strings.TrimSpace(lines[i].Value) != "" {
+			lines[i].Value = outs[i]
 		}
-		translated, err := p.translateString(ctx, p.analyzer.Analyze(lines[i].Value))
-		if err != nil {
-			return err
-		}
-		p.log.Info("translated row",
-			"progress", fmt.Sprintf("%d/%d", i+1, len(lines)),
-			"from", truncate(lines[i].Value), "to", truncate(translated))
-		lines[i].Value = translated
 	}
 	return nil
 }
 
-// translateReplicas groups consecutive rows that share a replica tag and
-// translates each group as one unit. Rows with no tag (header sections) are
-// each their own group. Groups touch disjoint slices of lines, so with
-// Options.Concurrency > 1 they are translated by a bounded worker pool.
+// translateReplicas groups consecutive rows sharing a replica tag and translates
+// each group as one unit (untagged rows are their own group). Masker analyzers
+// use a batched pass; others use a bounded worker pool over the groups.
 func (p *Pipeline) translateReplicas(ctx context.Context, lines []extract.DataLine) error {
 	if p.grouper == nil {
 		return p.translateRows(ctx, lines)
 	}
+	groups := p.replicaSpans(lines)
 
-	type span struct{ start, end int }
+	if _, ok := p.analyzer.(markup.Masker); ok {
+		return p.translateReplicasBatched(ctx, lines, groups)
+	}
+	return p.translateReplicasPool(ctx, lines, groups)
+}
+
+func (p *Pipeline) replicaSpans(lines []extract.DataLine) []span {
 	var groups []span
 	for i := 0; i < len(lines); {
 		j := i + 1
@@ -49,17 +77,47 @@ func (p *Pipeline) translateReplicas(ctx context.Context, lines []extract.DataLi
 		groups = append(groups, span{i, j - 1})
 		i = j
 	}
+	return groups
+}
 
-	conc := p.opts.Concurrency
-	if conc < 1 {
-		conc = 1
+// translateReplicasBatched prepares every group's source string, translates them
+// all in batched requests, then writes each result back.
+func (p *Pipeline) translateReplicasBatched(ctx context.Context, lines []extract.DataLine, groups []span) error {
+	totals := make([]string, len(groups))
+	for k, g := range groups {
+		t, err := p.replicaTotal(lines, g)
+		if err != nil {
+			return err
+		}
+		totals[k] = t
 	}
+
+	outs, err := p.translateManyMasked(ctx, totals)
+	if err != nil {
+		return err
+	}
+
+	for k, g := range groups {
+		if strings.TrimSpace(totals[k]) == "" {
+			continue
+		}
+		placeReplicaWhole(lines, g, outs[k])
+		p.log.Info("translated replica",
+			"rows", fmt.Sprintf("%d-%d", g.start, g.end), "to", truncate(outs[k]))
+	}
+	return nil
+}
+
+// translateReplicasPool is the non-Masker path: groups touch disjoint slices, so
+// they run through a bounded worker pool.
+func (p *Pipeline) translateReplicasPool(ctx context.Context, lines []extract.DataLine, groups []span) error {
+	conc := p.concurrency()
 	if conc == 1 {
 		for _, g := range groups {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			if err := p.translateReplicaGroup(ctx, lines, g.start, g.end); err != nil {
+			if err := p.translateReplicaGroup(ctx, lines, g); err != nil {
 				return err
 			}
 		}
@@ -68,7 +126,6 @@ func (p *Pipeline) translateReplicas(ctx context.Context, lines []extract.DataLi
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-
 	sem := make(chan struct{}, conc)
 	var wg sync.WaitGroup
 	var once sync.Once
@@ -86,7 +143,7 @@ func (p *Pipeline) translateReplicas(ctx context.Context, lines []extract.DataLi
 			if ctx.Err() != nil {
 				return
 			}
-			if err := p.translateReplicaGroup(ctx, lines, g.start, g.end); err != nil {
+			if err := p.translateReplicaGroup(ctx, lines, g); err != nil {
 				once.Do(func() { firstErr = err; cancel() })
 			}
 		}(g)
@@ -95,27 +152,10 @@ func (p *Pipeline) translateReplicas(ctx context.Context, lines []extract.DataLi
 	return firstErr
 }
 
-func (p *Pipeline) translateReplicaGroup(ctx context.Context, lines []extract.DataLine, start, end int) error {
-	var total string
-	if p.opts.Parasitizing {
-		for _, f := range p.opts.ParasitizingFiles {
-			v, err := p.parasitizer.Replica(f, lines[start].Tag)
-			if err != nil {
-				return err
-			}
-			if strings.TrimSpace(v) != "" {
-				total = v
-				break
-			}
-		}
-	}
-	if strings.TrimSpace(total) == "" {
-		// Not parasitizing, or no parasite match: translate the source rows.
-		var b strings.Builder
-		for j := start; j <= end; j++ {
-			b.WriteString(lines[j].Value)
-		}
-		total = b.String()
+func (p *Pipeline) translateReplicaGroup(ctx context.Context, lines []extract.DataLine, g span) error {
+	total, err := p.replicaTotal(lines, g)
+	if err != nil {
+		return err
 	}
 	if strings.TrimSpace(total) == "" {
 		return nil
@@ -125,91 +165,204 @@ func (p *Pipeline) translateReplicaGroup(ctx context.Context, lines []extract.Da
 	if err != nil {
 		return err
 	}
-
 	p.log.Info("translated replica",
-		"rows", fmt.Sprintf("%d-%d", start, end),
-		"from", truncate(lines[start].Value), "to", truncate(translated))
+		"rows", fmt.Sprintf("%d-%d", g.start, g.end), "to", truncate(translated))
 
-	if _, ok := p.analyzer.(markup.Masker); ok {
-		// Whole translation on the first non-empty row; blank the rest.
-		first := true
-		for j := start; j <= end; j++ {
-			if strings.TrimSpace(lines[j].Value) == "" {
-				continue
-			}
-			if first {
-				lines[j].Value, first = translated, false
-			} else {
-				lines[j].Value = ""
-			}
-		}
-		return nil
-	}
-
-	// Fragment path: keep the row count, split the translation by word count.
+	// non-Masker: keep the row count, split the translation by word count.
 	filled := 0
-	for j := start; j <= end; j++ {
+	for j := g.start; j <= g.end; j++ {
 		if strings.TrimSpace(lines[j].Value) != "" {
 			filled++
 		}
 	}
 	parts := splitSentence(translated, filled)
 	comp := 0
-	for j := start; j <= end; j++ {
+	for j := g.start; j <= g.end; j++ {
 		if strings.TrimSpace(lines[j].Value) == "" {
 			comp++
 			continue
 		}
-		lines[j].Value = parts[j-start-comp]
+		lines[j].Value = parts[j-g.start-comp]
 	}
 	return nil
 }
 
-// translateString translates one analyzed string and returns the rendered
-// result. When the analyzer supports masking the whole string goes to the
-// translator in one request with markup replaced by §i§ sentinels; otherwise
-// each free-text fragment is translated on its own.
-func (p *Pipeline) translateString(ctx context.Context, ps *markup.PartialString) (string, error) {
-	masker, ok := p.analyzer.(markup.Masker)
-	if !ok {
-		if err := p.translateParts(ctx, ps); err != nil {
-			return "", err
+// replicaTotal is the source text for a group: the first parasite file with a
+// match, else the group's own joined source rows.
+func (p *Pipeline) replicaTotal(lines []extract.DataLine, g span) (string, error) {
+	if p.opts.Parasitizing {
+		for _, f := range p.opts.ParasitizingFiles {
+			v, err := p.parasitizer.Replica(f, lines[g.start].Tag)
+			if err != nil {
+				return "", err
+			}
+			if strings.TrimSpace(v) != "" {
+				return v, nil
+			}
 		}
-		return p.analyzer.Render(ps), nil
+	}
+	var b strings.Builder
+	for j := g.start; j <= g.end; j++ {
+		b.WriteString(lines[j].Value)
+	}
+	return b.String(), nil
+}
+
+// placeReplicaWhole puts the whole translation on the first non-empty row of the
+// group and blanks the rest.
+func placeReplicaWhole(lines []extract.DataLine, g span, translated string) {
+	first := true
+	for j := g.start; j <= g.end; j++ {
+		if strings.TrimSpace(lines[j].Value) == "" {
+			continue
+		}
+		if first {
+			lines[j].Value, first = translated, false
+		} else {
+			lines[j].Value = ""
+		}
+	}
+}
+
+// translateManyMasked runs the Masker whole-string pipeline over many source
+// strings at once: mask each, batch-translate, unmask, restore case and outer
+// spacing. A source that mangles its sentinels is retried through the
+// fragment path. sources[i] that is empty or markup-only yields "" or the
+// rendered original respectively.
+func (p *Pipeline) translateManyMasked(ctx context.Context, sources []string) ([]string, error) {
+	masker := p.analyzer.(markup.Masker)
+	out := make([]string, len(sources))
+
+	type meta struct {
+		markers     []string
+		bare        string
+		lead, trail int
+		src         string
+	}
+	m := make([]meta, len(sources))
+	var idx []int
+	var texts []string
+
+	for i, s := range sources {
+		if strings.TrimSpace(s) == "" {
+			continue
+		}
+		ps := p.analyzer.Analyze(s)
+		masked, markers := masker.Mask(ps)
+		bare := strings.TrimSpace(markup.StripSentinels(masked))
+		if bare == "" {
+			out[i] = p.analyzer.Render(ps)
+			continue
+		}
+		m[i] = meta{
+			markers: markers, bare: bare,
+			lead: textutil.CountLeadingSpaces(masked), trail: textutil.CountFinalSpaces(masked),
+			src: s,
+		}
+		idx = append(idx, i)
+		texts = append(texts, strings.TrimSpace(masked))
 	}
 
-	masked, markers := masker.Mask(ps)
-	bare := strings.TrimSpace(markup.StripSentinels(masked))
-	if bare == "" {
-		return p.analyzer.Render(ps), nil // markup only, nothing to translate
-	}
-
-	trimmed := strings.TrimSpace(masked)
-	lead := textutil.CountLeadingSpaces(masked)
-	trail := textutil.CountFinalSpaces(masked)
-
-	out, err := p.translator.Translate(ctx, trimmed, p.opts.SourceLang, p.opts.TargetLang)
+	results, err := p.translateBatch(ctx, texts)
 	if err != nil {
-		return "", fmt.Errorf("translate %q: %w", truncate(trimmed), err)
+		return nil, err
 	}
 
-	if len(markers) > 0 && !markup.SentinelsIntact(out, len(markers)) {
-		// The translator corrupted a sentinel; fall back to translating each
-		// free-text fragment on its own (ps is still un-mutated here).
-		if err := p.translateParts(ctx, ps); err != nil {
-			return "", err
+	for n, i := range idx {
+		raw := results[n]
+		md := m[i]
+		if len(md.markers) > 0 && !markup.SentinelsIntact(raw, len(md.markers)) {
+			ps := p.analyzer.Analyze(md.src)
+			if err := p.translateParts(ctx, ps); err != nil {
+				return nil, err
+			}
+			out[i] = p.analyzer.Render(ps)
+			continue
 		}
-		return p.analyzer.Render(ps), nil
+		u := markup.Unmask(raw, md.markers)
+		u = caseFirstLetter(u, firstLetterUpper(md.bare))
+		out[i] = strings.Repeat(" ", md.lead) + u + strings.Repeat(" ", md.trail)
+	}
+	return out, nil
+}
+
+// translateBatch translates texts in order, in chunks of batchSize, running up
+// to Concurrency chunks at once. A chunk whose batched call fails or returns the
+// wrong count is retried one string at a time.
+func (p *Pipeline) translateBatch(ctx context.Context, texts []string) ([]string, error) {
+	out := make([]string, len(texts))
+	if len(texts) == 0 {
+		return out, nil
 	}
 
-	out = markup.Unmask(out, markers)
-	out = caseFirstLetter(out, firstLetterUpper(bare))
-	return strings.Repeat(" ", lead) + out + strings.Repeat(" ", trail), nil
+	var chunks []span
+	for lo := 0; lo < len(texts); lo += batchSize {
+		hi := lo + batchSize
+		if hi > len(texts) {
+			hi = len(texts)
+		}
+		chunks = append(chunks, span{lo, hi - 1})
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	sem := make(chan struct{}, p.concurrency())
+	var wg sync.WaitGroup
+	var once sync.Once
+	var firstErr error
+	fail := func(err error) { once.Do(func() { firstErr = err; cancel() }) }
+
+	for _, c := range chunks {
+		if ctx.Err() != nil {
+			break
+		}
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(lo, hi int) { // hi inclusive
+			defer wg.Done()
+			defer func() { <-sem }()
+			if ctx.Err() != nil {
+				return
+			}
+			in := texts[lo : hi+1]
+			res, err := translate.Batch(ctx, p.translator, in, p.opts.SourceLang, p.opts.TargetLang)
+			if err == nil && len(res) == len(in) {
+				copy(out[lo:hi+1], res)
+				return
+			}
+			p.log.Warn("batch translate fell back to per-string", "chunk", fmt.Sprintf("%d-%d", lo, hi), "error", err)
+			for i := lo; i <= hi; i++ {
+				v, e := p.translator.Translate(ctx, texts[i], p.opts.SourceLang, p.opts.TargetLang)
+				if e != nil {
+					fail(fmt.Errorf("translate %q: %w", truncate(texts[i]), e))
+					return
+				}
+				out[i] = v
+			}
+		}(c.start, c.end)
+	}
+	wg.Wait()
+	return out, firstErr
+}
+
+func (p *Pipeline) concurrency() int {
+	if p.opts.Concurrency < 1 {
+		return 1
+	}
+	return p.opts.Concurrency
+}
+
+// translateString translates one analyzed string for the non-Masker path: each
+// free-text fragment is translated on its own and reassembled.
+func (p *Pipeline) translateString(ctx context.Context, ps *markup.PartialString) (string, error) {
+	if err := p.translateParts(ctx, ps); err != nil {
+		return "", err
+	}
+	return p.analyzer.Render(ps), nil
 }
 
 // translateParts translates every free-text part of ps in place, preserving each
-// part's leading/trailing spaces and the case of its first letter. Used only for
-// analyzers that do not implement markup.Masker.
+// part's leading/trailing spaces and the case of its first letter.
 func (p *Pipeline) translateParts(ctx context.Context, ps *markup.PartialString) error {
 	for _, part := range p.analyzer.Translatable(ps) {
 		trimmed := strings.TrimSpace(part.Value)
