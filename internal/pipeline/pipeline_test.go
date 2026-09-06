@@ -378,6 +378,54 @@ func TestPipelineBatchedMaskerDeterministic(t *testing.T) {
 	}
 }
 
+type langVerbatim struct{}
+
+func (langVerbatim) Verbatim(tag string) bool { return tag == "LANGUAGE" }
+
+func TestPipelineVerbatimTag(t *testing.T) {
+	srcDir := t.TempDir()
+	mustWrite(t, filepath.Join(srcDir, "d.txt"),
+		"LANGUAGE\tEnglish\nline1\tHello\n")
+
+	run := func(carry map[string]string) string {
+		out := filepath.Join(t.TempDir(), "out")
+		para := perFileParasitizer{}
+		var files []string
+		if carry != nil {
+			para["C"] = carry
+			files = []string{"C"}
+		}
+		p, err := New(Deps{
+			Analyzer: maskAnalyzer{}, Format: taggedTabFormat{},
+			Translator: prefixTranslator{}, Grouper: tagGrouper{},
+			Parasitizer: para, Verbatim: langVerbatim{},
+			Options: Options{
+				SourceFolder: srcDir, DestFolder: out,
+				SourceLang: "ru", TargetLang: "be", Delimiter: "\t",
+				MultiRowReplicas: true, Parasitizing: carry != nil,
+				CarryOverFiles: files,
+			},
+			Logger: discardLogger(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := p.Run(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		return mustRead(t, filepath.Join(out, "d.txt"))
+	}
+
+	// no carryOver: LANGUAGE kept as the source value, never translated.
+	if got := run(nil); !strings.Contains(got, "LANGUAGE\tEnglish\n") {
+		t.Errorf("verbatim tag was translated without a carryOver: %q", got)
+	}
+	// carryOver present: used verbatim (not "t:...").
+	if got := run(map[string]string{"LANGUAGE": "Беларуская"}); !strings.Contains(got, "LANGUAGE\tБеларуская\n") {
+		t.Errorf("carryOver not applied to verbatim tag: %q", got)
+	}
+}
+
 func TestPipelineCarryOverUsedVerbatim(t *testing.T) {
 	srcDir := t.TempDir()
 	dstDir := filepath.Join(t.TempDir(), "out")

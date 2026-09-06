@@ -91,8 +91,18 @@ func loadTXTParasite(path string) (map[string]string, error) {
 			section = line[1 : len(line)-1]
 			continue
 		}
-		// LABELS / MENUS: "<key> : <value>" keyed by section + key.
-		if section == "LABELS" || section == "MENUS" {
+		// LANGUAGE: one bare value line, keyed by the section name.
+		if section == "LANGUAGE" {
+			if strings.TrimSpace(line) != "" {
+				if _, exists := out["LANGUAGE"]; !exists {
+					out["LANGUAGE"] = line
+				}
+			}
+			continue
+		}
+		// FONT / CREDITS / LABELS / MENUS: "<key> : <value>" keyed by section + key.
+		switch section {
+		case "FONT", "CREDITS", "LABELS", "MENUS":
 			if k, v, ok := strings.Cut(line, " : "); ok {
 				key := section + "/" + strings.TrimRight(k, " ")
 				if _, exists := out[key]; !exists {

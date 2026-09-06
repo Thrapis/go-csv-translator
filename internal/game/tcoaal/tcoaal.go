@@ -5,6 +5,8 @@
 package tcoaal
 
 import (
+	"strings"
+
 	"github.com/Thrapis/go-csv-translator/internal/extract"
 	_ "github.com/Thrapis/go-csv-translator/internal/extract/tcoaalcsv" // register "tcoaal-csv"
 	_ "github.com/Thrapis/go-csv-translator/internal/extract/tcoaaltxt" // register "tcoaal-txt"
@@ -36,4 +38,12 @@ func (*Game) SameReplica(a, b extract.DataLine) bool {
 // Replica returns the pre-existing human translation for tag from file.
 func (g *Game) Replica(file, tag string) (string, error) {
 	return g.parasite.replica(file, tag)
+}
+
+// Verbatim marks localization-identity rows (the language name, font, credits)
+// that must never be machine-translated - only carried over.
+func (*Game) Verbatim(tag string) bool {
+	return tag == "LANGUAGE" ||
+		strings.HasPrefix(tag, "FONT/") ||
+		strings.HasPrefix(tag, "CREDITS/")
 }

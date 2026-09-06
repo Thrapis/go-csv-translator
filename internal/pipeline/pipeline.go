@@ -42,17 +42,20 @@ type Pipeline struct {
 	translator  translate.Translator
 	grouper     game.ReplicaGrouper // nil when the game has no replica grouping
 	parasitizer game.Parasitizer    // nil unless Options.Parasitizing
+	verbatim    game.Verbatimer     // nil when the game marks nothing verbatim
 	opts        Options
 	log         *slog.Logger
 }
 
-// Deps are the collaborators Pipeline needs; grouper and parasitizer may be nil.
+// Deps are the collaborators Pipeline needs; grouper, parasitizer and verbatim
+// may be nil.
 type Deps struct {
 	Analyzer    markup.Analyzer
 	Format      extract.Format
 	Translator  translate.Translator
 	Grouper     game.ReplicaGrouper
 	Parasitizer game.Parasitizer
+	Verbatim    game.Verbatimer
 	Options     Options
 	Logger      *slog.Logger
 }
@@ -78,6 +81,7 @@ func New(d Deps) (*Pipeline, error) {
 		translator:  d.Translator,
 		grouper:     d.Grouper,
 		parasitizer: d.Parasitizer,
+		verbatim:    d.Verbatim,
 		opts:        d.Options,
 		log:         d.Logger,
 	}, nil

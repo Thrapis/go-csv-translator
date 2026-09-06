@@ -88,7 +88,7 @@ func (p *Pipeline) replicaSpans(lines []extract.DataLine) []span {
 func (p *Pipeline) translateReplicasBatched(ctx context.Context, lines []extract.DataLine, groups []span) error {
 	totals := make([]string, len(groups)) // source text to translate; "" if carried or empty
 	carried := make([]string, len(groups))
-	var nCarry, nParasite int
+	var nCarry, nParasite, nVerbatim int
 
 	for k, g := range groups {
 		v, err := p.carryOver(lines, g)
@@ -99,6 +99,10 @@ func (p *Pipeline) translateReplicasBatched(ctx context.Context, lines []extract
 			carried[k] = v
 			nCarry++
 			continue
+		}
+		if p.isVerbatim(lines[g.start].Tag) {
+			nVerbatim++
+			continue // localization metadata: keep the source value unless carried
 		}
 		t, para, err := p.replicaTotal(lines, g)
 		if err != nil {
@@ -111,8 +115,8 @@ func (p *Pipeline) translateReplicasBatched(ctx context.Context, lines []extract
 	}
 	if p.opts.Parasitizing {
 		p.log.Info("replicas", "total", len(groups),
-			"carried_over", nCarry, "from_parasite", nParasite,
-			"machine_translated", len(groups)-nCarry-nParasite)
+			"carried_over", nCarry, "from_parasite", nParasite, "verbatim", nVerbatim,
+			"machine_translated", len(groups)-nCarry-nParasite-nVerbatim)
 	}
 
 	outs, err := p.translateManyMasked(ctx, totals)
@@ -182,6 +186,9 @@ func (p *Pipeline) translateReplicaGroup(ctx context.Context, lines []extract.Da
 		placeReplicaWhole(lines, g, v)
 		return nil
 	}
+	if p.isVerbatim(lines[g.start].Tag) {
+		return nil
+	}
 
 	total, _, err := p.replicaTotal(lines, g)
 	if err != nil {
@@ -213,6 +220,11 @@ func (p *Pipeline) translateReplicaGroup(ctx context.Context, lines []extract.Da
 		lines[j].Value = parts[j-g.start-comp]
 	}
 	return nil
+}
+
+// isVerbatim reports whether the game marks this tag as never-translate.
+func (p *Pipeline) isVerbatim(tag string) bool {
+	return p.verbatim != nil && p.verbatim.Verbatim(tag)
 }
 
 // carryOver returns a previous translation for the group's replica id from the
@@ -255,15 +267,21 @@ func (p *Pipeline) replicaTotal(lines []extract.DataLine, g span) (text string, 
 // placeReplicaWhole puts the whole translation on the first non-empty row of the
 // group and blanks the rest.
 func placeReplicaWhole(lines []extract.DataLine, g span, translated string) {
-	first := true
+	// Put the text on the first non-empty row of the group, or on the first row
+	// if the group has no non-empty row (e.g. a blank CREDITS line being filled).
+	target := g.start
 	for j := g.start; j <= g.end; j++ {
-		if strings.TrimSpace(lines[j].Value) == "" {
-			continue
+		if strings.TrimSpace(lines[j].Value) != "" {
+			target = j
+			break
 		}
-		if first {
-			lines[j].Value, first = translated, false
-		} else {
-			lines[j].Value = ""
+	}
+	for j := g.start; j <= g.end; j++ {
+		switch {
+		case j == target:
+			lines[j].Value = translated
+		case strings.TrimSpace(lines[j].Value) != "":
+			lines[j].Value = "" // other rows of the replica are folded in
 		}
 	}
 }

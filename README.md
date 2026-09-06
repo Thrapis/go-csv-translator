@@ -39,10 +39,13 @@ documented inline in the examples; the essentials:
 | `parasitizing.carryOver` | target-language files (e.g. a previous run's output); a matching entry is copied verbatim, never re-translated |
 | `parasitizing.files` | source-language translations (TXT or CSV); still translated, but a better source than the game's own. Checked after carryOver; first match wins, the rest is machine-translated |
 
-Both lists match a **dialogue** replica by its `#id` and a **LABELS / MENUS**
-entry by its section + key text (so `Save` in `LABELS` and in `MENUS` stay
-distinct). Everything a source parasite covers is translated with sentence
-context; everything carryOver covers is taken as-is.
+Matching: a **dialogue** replica by its `#id`; a **LABELS / MENUS / FONT /
+CREDITS** entry by section + key text (so `Save` in `LABELS` and in `MENUS`
+stay distinct); **LANGUAGE** by the section name. A source parasite covers
+everything but the localization-identity rows (LANGUAGE / FONT / CREDITS) —
+those are filled only from `carryOver`, and without a match keep the source
+value (they are never machine-translated). `[VERSION]` always comes from the
+new source.
 
 ### TCOAAL formats
 
@@ -55,8 +58,9 @@ and select the layout with `source.format`:
 | `tcoaal-csv` (default) | `dialogue.csv` — 4-column CSV |
 | `tcoaal-txt` | `dialogue.txt` — `key : value` lines |
 
-Both read and write the combined file directly (no split/merge step). The
-metadata sections (VERSION/LANGUAGE/FONT/CREDITS) pass through untouched; the
+Both read and write the combined file directly (no split/merge step). `[VERSION]`
+passes through from the source; `[LANGUAGE]` / `[FONT]` / `[CREDITS]` come from a
+`carryOver` localization or stay as the source value; the
 rest — menu labels, speaker/item names, descriptions and all dialogue — is
 translated in place, and every non-translated byte is preserved.
 

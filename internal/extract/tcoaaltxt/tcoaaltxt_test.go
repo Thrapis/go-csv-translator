@@ -49,31 +49,35 @@ func TestExtractSlots(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Game, New Game, Ashley, "Chop chop", "" (k2), 2×Map001 a1, a2 "Ah.", c1 => 9
-	if len(lines) != 9 {
-		t.Fatalf("got %d slots, want 9: %+v", len(lines), lines)
+	// LANGUAGE, Game, New Game, Ashley, "Chop chop", "" (k2), 2×Map001 a1,
+	// a2 "Ah.", c1 => 10
+	if len(lines) != 10 {
+		t.Fatalf("got %d slots, want 10: %+v", len(lines), lines)
 	}
-	if lines[0].Value != "The Coffin" {
-		t.Errorf("LABELS value = %q", lines[0].Value)
+	if lines[0].Value != "English" || lines[0].Tag != "LANGUAGE" {
+		t.Errorf("LANGUAGE slot = %+v", lines[0])
 	}
-	if lines[1].Value != "New Game" { // padded key stripped, value only
-		t.Errorf("MENUS value = %q", lines[1].Value)
+	if lines[1].Value != "The Coffin" || lines[1].Tag != "LABELS/Game" {
+		t.Errorf("LABELS slot = %+v", lines[1])
 	}
-	if lines[2].Value != "Ashley" || lines[2].Tag != "#id1" {
-		t.Errorf("SPEAKERS slot = %+v", lines[2])
+	if lines[2].Value != "New Game" || lines[2].Tag != "MENUS/New Game" {
+		t.Errorf("MENUS slot = %+v", lines[2])
 	}
-	if lines[3].Value != "Chop chop" || lines[3].Tag != "#k1" {
-		t.Errorf("DESCRIPTIONS slot = %+v", lines[3])
+	if lines[3].Value != "Ashley" || lines[3].Tag != "#id1" {
+		t.Errorf("SPEAKERS slot = %+v", lines[3])
+	}
+	if lines[4].Value != "Chop chop" || lines[4].Tag != "#k1" {
+		t.Errorf("DESCRIPTIONS slot = %+v", lines[4])
 	}
 	// Map001 a1 has two value lines sharing the tag
-	if lines[5].Tag != "#a1" || lines[6].Tag != "#a1" {
-		t.Errorf("replica tags = %q,%q want #a1,#a1", lines[5].Tag, lines[6].Tag)
+	if lines[6].Tag != "#a1" || lines[7].Tag != "#a1" {
+		t.Errorf("replica tags = %q,%q want #a1,#a1", lines[6].Tag, lines[7].Tag)
 	}
-	if lines[5].Value != "Who wouldn't love " {
-		t.Errorf("value keeps trailing space: %q", lines[5].Value)
+	if lines[6].Value != "Who wouldn't love " {
+		t.Errorf("value keeps trailing space: %q", lines[6].Value)
 	}
-	if lines[8].Value != "Call again." || lines[8].Tag != "#c1" {
-		t.Errorf("CHOICES slot = %+v", lines[8])
+	if lines[9].Value != "Call again." || lines[9].Tag != "#c1" {
+		t.Errorf("CHOICES slot = %+v", lines[9])
 	}
 	_ = s
 }
@@ -115,8 +119,8 @@ func TestComposeSubstitutes(t *testing.T) {
 		"#id1 : X\r\n",
 		"#k1 (Axe)\r\n: X\r\n",
 		"#c1 : X\r\n",
-		"3.0.13 : deadbeef\r\n", // VERSION untouched
-		"English\r\n",           // LANGUAGE untouched
+		"[LANGUAGE]\r\nX\r\n",   // LANGUAGE is a slot now
+		"3.0.13 : deadbeef\r\n", // VERSION still untouched
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)

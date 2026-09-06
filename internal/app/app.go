@@ -56,6 +56,7 @@ func New(cfg *config.Config, log *slog.Logger) (*App, error) {
 
 	grouper, _ := g.(game.ReplicaGrouper)
 	parasitizer, _ := g.(game.Parasitizer)
+	verbatim, _ := g.(game.Verbatimer)
 	if cfg.Parasitizing.Enabled && parasitizer == nil {
 		return nil, fmt.Errorf("game %q does not support parasitizing", cfg.Game)
 	}
@@ -66,6 +67,7 @@ func New(cfg *config.Config, log *slog.Logger) (*App, error) {
 		Translator:  translator,
 		Grouper:     grouper,
 		Parasitizer: parasitizer,
+		Verbatim:    verbatim,
 		Options: pipeline.Options{
 			SourceFolder:      cfg.Source.Folder,
 			DestFolder:        cfg.Destination.Folder,

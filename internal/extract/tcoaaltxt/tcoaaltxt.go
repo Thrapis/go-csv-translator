@@ -30,16 +30,19 @@ func init() {
 type sectionKind int
 
 const (
-	kindMeta  sectionKind = iota // VERSION / LANGUAGE / FONT / CREDITS
-	kindKV                       // LABELS / MENUS / SPEAKERS / ITEMS
+	kindMeta  sectionKind = iota // VERSION (kept from source)
+	kindBare                     // LANGUAGE (one bare value line)
+	kindKV                       // FONT / CREDITS / LABELS / MENUS / SPEAKERS / ITEMS
 	kindBlock                    // DESCRIPTIONS / CHOICES / *.json
 )
 
 func kindOf(name string) sectionKind {
 	switch name {
-	case "VERSION", "LANGUAGE", "FONT", "CREDITS":
+	case "VERSION":
 		return kindMeta
-	case "LABELS", "MENUS", "SPEAKERS", "ITEMS":
+	case "LANGUAGE":
+		return kindBare
+	case "FONT", "CREDITS", "LABELS", "MENUS", "SPEAKERS", "ITEMS":
 		return kindKV
 	default:
 		return kindBlock
@@ -90,12 +93,15 @@ func ParseDoc(r io.Reader) (*Doc, string, error) {
 		}
 
 		switch kind {
+		case kindBare:
+			// LANGUAGE: the whole line is the value, keyed by the section name.
+			d.slots = append(d.slots, slot{line: i, prefix: "", tag: section})
 		case kindKV:
 			if p := kvPrefix(line); p != "" {
 				tag := ""
 				if strings.HasPrefix(line, "#") { // SPEAKERS / ITEMS: id-keyed
 					tag = blockHeaderID(strings.TrimSuffix(p, " : "))
-				} else { // LABELS / MENUS: keyed by section + key text
+				} else { // FONT / CREDITS / LABELS / MENUS: keyed by section + key text
 					tag = section + "/" + strings.TrimRight(strings.TrimSuffix(p, " : "), " ")
 				}
 				d.slots = append(d.slots, slot{line: i, prefix: p, tag: tag})

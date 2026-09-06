@@ -37,6 +37,14 @@ type Parasitizer interface {
 	Replica(file, tag string) (string, error)
 }
 
+// Verbatimer is an optional capability: a game implements it to mark rows that
+// must never be machine-translated (localization metadata such as the language
+// name or font). Such a row is filled only from a carryOver file; without a
+// match it keeps its source value.
+type Verbatimer interface {
+	Verbatim(tag string) bool
+}
+
 var registry = map[string]Game{}
 
 // Register adds g under g.Name(); call it from a game package's init.
