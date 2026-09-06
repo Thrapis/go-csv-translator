@@ -143,6 +143,7 @@ func (p *Pipeline) translateFile(ctx context.Context, f fileRef, dstDir string) 
 	if p.opts.SkipFirstLine && len(lines) > 0 {
 		lines = lines[1:]
 	}
+	p.log.Info("file", "name", f.name, "rows", len(lines))
 
 	if p.opts.MultiRowReplicas {
 		err = p.translateReplicas(ctx, lines)

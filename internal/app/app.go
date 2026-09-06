@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/Thrapis/go-csv-translator/internal/config"
 	"github.com/Thrapis/go-csv-translator/internal/extract"
@@ -84,10 +85,10 @@ func New(cfg *config.Config, log *slog.Logger) (*App, error) {
 		return nil, err
 	}
 
-	log.Info("configured run",
-		"game", g.Name(), "format", formatID, "delimiter", delimiter,
+	log.Info("run",
+		"game", g.Name(), "format", formatID,
 		"direction", cfg.Language.Source+"->"+cfg.Language.Target,
-		"translators", cfg.Translators)
+		"translators", strings.Join(cfg.Translators, ","))
 
 	return &App{cfg: cfg, log: log, pipe: pipe}, nil
 }

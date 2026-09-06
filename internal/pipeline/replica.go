@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 	"unicode"
 
 	"github.com/Thrapis/go-csv-translator/internal/extract"
@@ -84,12 +86,20 @@ func (p *Pipeline) replicaSpans(lines []extract.DataLine) []span {
 // all in batched requests, then writes each result back.
 func (p *Pipeline) translateReplicasBatched(ctx context.Context, lines []extract.DataLine, groups []span) error {
 	totals := make([]string, len(groups))
+	fromParasite := 0
 	for k, g := range groups {
-		t, err := p.replicaTotal(lines, g)
+		t, para, err := p.replicaTotal(lines, g)
 		if err != nil {
 			return err
 		}
 		totals[k] = t
+		if para {
+			fromParasite++
+		}
+	}
+	if p.opts.Parasitizing {
+		p.log.Info("replicas", "total", len(groups),
+			"from_parasite", fromParasite, "machine_translated", len(groups)-fromParasite)
 	}
 
 	outs, err := p.translateManyMasked(ctx, totals)
@@ -102,8 +112,6 @@ func (p *Pipeline) translateReplicasBatched(ctx context.Context, lines []extract
 			continue
 		}
 		placeReplicaWhole(lines, g, outs[k])
-		p.log.Info("translated replica",
-			"rows", fmt.Sprintf("%d-%d", g.start, g.end), "to", truncate(outs[k]))
 	}
 	return nil
 }
@@ -153,7 +161,7 @@ func (p *Pipeline) translateReplicasPool(ctx context.Context, lines []extract.Da
 }
 
 func (p *Pipeline) translateReplicaGroup(ctx context.Context, lines []extract.DataLine, g span) error {
-	total, err := p.replicaTotal(lines, g)
+	total, _, err := p.replicaTotal(lines, g)
 	if err != nil {
 		return err
 	}
@@ -165,8 +173,6 @@ func (p *Pipeline) translateReplicaGroup(ctx context.Context, lines []extract.Da
 	if err != nil {
 		return err
 	}
-	p.log.Info("translated replica",
-		"rows", fmt.Sprintf("%d-%d", g.start, g.end), "to", truncate(translated))
 
 	// non-Masker: keep the row count, split the translation by word count.
 	filled := 0
@@ -188,16 +194,16 @@ func (p *Pipeline) translateReplicaGroup(ctx context.Context, lines []extract.Da
 }
 
 // replicaTotal is the source text for a group: the first parasite file with a
-// match, else the group's own joined source rows.
-func (p *Pipeline) replicaTotal(lines []extract.DataLine, g span) (string, error) {
+// match (fromParasite true), else the group's own joined source rows.
+func (p *Pipeline) replicaTotal(lines []extract.DataLine, g span) (text string, fromParasite bool, err error) {
 	if p.opts.Parasitizing {
 		for _, f := range p.opts.ParasitizingFiles {
 			v, err := p.parasitizer.Replica(f, lines[g.start].Tag)
 			if err != nil {
-				return "", err
+				return "", false, err
 			}
 			if strings.TrimSpace(v) != "" {
-				return v, nil
+				return v, true, nil
 			}
 		}
 	}
@@ -205,7 +211,7 @@ func (p *Pipeline) replicaTotal(lines []extract.DataLine, g span) (string, error
 	for j := g.start; j <= g.end; j++ {
 		b.WriteString(lines[j].Value)
 	}
-	return b.String(), nil
+	return b.String(), false, nil
 }
 
 // placeReplicaWhole puts the whole translation on the first non-empty row of the
@@ -312,6 +318,10 @@ func (p *Pipeline) translateBatch(ctx context.Context, texts []string) ([]string
 	var firstErr error
 	fail := func(err error) { once.Do(func() { firstErr = err; cancel() }) }
 
+	total := len(texts)
+	started := time.Now()
+	var done int64
+
 	for _, c := range chunks {
 		if ctx.Err() != nil {
 			break
@@ -328,21 +338,38 @@ func (p *Pipeline) translateBatch(ctx context.Context, texts []string) ([]string
 			res, err := translate.Batch(ctx, p.translator, in, p.opts.SourceLang, p.opts.TargetLang)
 			if err == nil && len(res) == len(in) {
 				copy(out[lo:hi+1], res)
-				return
-			}
-			p.log.Warn("batch translate fell back to per-string", "chunk", fmt.Sprintf("%d-%d", lo, hi), "error", err)
-			for i := lo; i <= hi; i++ {
-				v, e := p.translator.Translate(ctx, texts[i], p.opts.SourceLang, p.opts.TargetLang)
-				if e != nil {
-					fail(fmt.Errorf("translate %q: %w", truncate(texts[i]), e))
-					return
+			} else {
+				p.log.Warn("batch fell back to per-string", "reason", err)
+				for i := lo; i <= hi; i++ {
+					v, e := p.translator.Translate(ctx, texts[i], p.opts.SourceLang, p.opts.TargetLang)
+					if e != nil {
+						fail(fmt.Errorf("translate %q: %w", truncate(texts[i]), e))
+						return
+					}
+					out[i] = v
 				}
-				out[i] = v
 			}
+			p.reportProgress(atomic.AddInt64(&done, int64(hi-lo+1)), int64(total), started)
 		}(c.start, c.end)
 	}
 	wg.Wait()
 	return out, firstErr
+}
+
+// reportProgress logs a single "translating" line per completed chunk.
+func (p *Pipeline) reportProgress(done, total int64, started time.Time) {
+	if total == 0 {
+		return
+	}
+	elapsed := time.Since(started)
+	var eta time.Duration
+	if done > 0 {
+		eta = (elapsed * time.Duration(total-done) / time.Duration(done)).Round(time.Second)
+	}
+	p.log.Info("translating",
+		"done", fmt.Sprintf("%d/%d", done, total),
+		"pct", done*100/total,
+		"eta", eta)
 }
 
 func (p *Pipeline) concurrency() int {

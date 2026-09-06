@@ -9,7 +9,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -70,12 +69,4 @@ func run() int {
 
 	log.Info("done")
 	return 0
-}
-
-func newLogger(level string) *slog.Logger {
-	var lv slog.Level
-	if err := lv.UnmarshalText([]byte(level)); err != nil {
-		lv = slog.LevelInfo
-	}
-	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lv}))
 }
