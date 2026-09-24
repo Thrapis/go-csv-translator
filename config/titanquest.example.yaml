@@ -1,0 +1,28 @@
+# Titan Quest — English -> Belarusian.
+
+game: titanquest
+
+source:
+  folder: "C:/Localization/TitanQuest/en"
+  # format omitted -> "delimited" (key=value lines)
+destination:
+  folder: "C:/Localization/TitanQuest/be"
+  folderNameMap:
+    en: be
+
+language:
+  source: en
+  target: be
+
+delimiter: "="
+skipFirstLine: false
+multiRowReplicas: false
+
+translators:
+  - lingvanex
+  - google
+
+lingvanex:
+  manage: true
+
+logLevel: info

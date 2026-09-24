@@ -1,0 +1,54 @@
+# The Coffin of Andy and Leyley — Russian -> Belarusian.
+# Copy this file to config/tcoaal.ru-be.yaml (gitignored) and edit the paths,
+# then run:  gametranslator -config config/tcoaal.ru-be.yaml
+
+game: tcoaal
+
+source:
+  # The whole tree under folder is walked; `files` restricts it to the dialogue
+  # file so font/ and img/ assets in the export are left alone.
+  folder: "C:/Localization/TCOAAL/EN-CSV"
+  format: tcoaal-csv          # tcoaal-csv (default) or tcoaal-txt
+  files: "dialogue.*"         # base-name glob; omit to translate every file
+destination:
+  folder: "C:/Localization/TCOAAL/BE-CSV"
+  folderNameMap:
+    ru: be                    # rename any sub-folder called "ru" to "be" on output
+
+language:
+  source: ru
+  target: be
+
+skipFirstLine: false
+multiRowReplicas: true         # translate a multi-line replica as one sentence
+concurrency: 4                 # batches in flight (>= server INTER_THREADS); output is identical at any value
+
+parasitizing:
+  enabled: true                # reuse existing translations where available
+  # carryOver: files already in the target language. A replica whose id is
+  # found here is copied verbatim, never re-translated - point this at a
+  # previous run's output to translate only what changed in a new game version.
+  carryOver:
+    - "C:/Localization/TCOAAL/BE - TXT/dialogue.txt"
+  # files: source-language translations. Still translated, but they give a
+  # better source than the game's English. First match wins across both lists
+  # (carryOver checked first); anything unmatched is machine-translated. A
+  # #id/": " TXT dump or a dialogue.csv both work.
+  files:
+    - "C:/Localization/TCOAAL/RU-TXT/dialogue.txt"
+    - "C:/Localization/TCOAAL/RU-CSV/dialogue.csv"
+
+translators:                   # tried in order; google is the fallback
+  - lingvanex
+  - google
+
+lingvanex:
+  manage: true                 # start the python server on launch, stop it on exit
+  address: 127.0.0.1
+  port: 8000
+  workdir: third_party/lingvanex-server
+  command: [py, ./server.py]
+  healthTimeout: 30s
+  stopTimeout: 10s
+
+logLevel: info
