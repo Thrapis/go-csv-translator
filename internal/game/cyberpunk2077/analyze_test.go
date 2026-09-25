@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Thrapis/go-csv-translator/internal/markup"
+	"github.com/Thrapis/go-game-translator/internal/markup"
 )
 
 // Real strings from the game's ru-ru onscreens/subtitles.

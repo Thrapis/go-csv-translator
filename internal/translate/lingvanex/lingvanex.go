@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Thrapis/go-csv-translator/internal/translate"
+	"github.com/Thrapis/go-game-translator/internal/translate"
 )
 
 func init() {

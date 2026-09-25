@@ -18,7 +18,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/Thrapis/go-csv-translator/internal/config"
+	"github.com/Thrapis/go-game-translator/internal/config"
 )
 
 // Server manages one Lingvanex server process.

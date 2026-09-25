@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Thrapis/go-csv-translator/internal/extract/tcoaalcsv"
+	"github.com/Thrapis/go-game-translator/internal/extract/tcoaalcsv"
 )
 
 func main() {

@@ -8,11 +8,11 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/Thrapis/go-csv-translator/internal/config"
-	"github.com/Thrapis/go-csv-translator/internal/extract"
-	"github.com/Thrapis/go-csv-translator/internal/game"
-	"github.com/Thrapis/go-csv-translator/internal/pipeline"
-	"github.com/Thrapis/go-csv-translator/internal/translate"
+	"github.com/Thrapis/go-game-translator/internal/config"
+	"github.com/Thrapis/go-game-translator/internal/extract"
+	"github.com/Thrapis/go-game-translator/internal/game"
+	"github.com/Thrapis/go-game-translator/internal/pipeline"
+	"github.com/Thrapis/go-game-translator/internal/translate"
 )
 
 // App is a configured, ready-to-run translation job.

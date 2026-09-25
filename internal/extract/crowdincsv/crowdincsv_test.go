@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Thrapis/go-csv-translator/internal/extract"
+	"github.com/Thrapis/go-game-translator/internal/extract"
 )
 
 const sample = "id,source,translation,context\n" +

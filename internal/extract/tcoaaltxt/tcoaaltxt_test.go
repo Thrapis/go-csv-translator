@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Thrapis/go-csv-translator/internal/extract"
+	"github.com/Thrapis/go-game-translator/internal/extract"
 )
 
 const fixture = "[VERSION]\r\n" +

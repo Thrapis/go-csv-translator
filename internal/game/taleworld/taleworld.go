@@ -3,9 +3,9 @@
 package taleworld
 
 import (
-	_ "github.com/Thrapis/go-csv-translator/internal/extract/delimited" // register "delimited"
-	"github.com/Thrapis/go-csv-translator/internal/game"
-	"github.com/Thrapis/go-csv-translator/internal/markup"
+	_ "github.com/Thrapis/go-game-translator/internal/extract/delimited" // register "delimited"
+	"github.com/Thrapis/go-game-translator/internal/game"
+	"github.com/Thrapis/go-game-translator/internal/markup"
 )
 
 func init() { game.Register(New()) }

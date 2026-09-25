@@ -9,10 +9,10 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/Thrapis/go-csv-translator/internal/extract"
-	"github.com/Thrapis/go-csv-translator/internal/markup"
-	"github.com/Thrapis/go-csv-translator/internal/textutil"
-	"github.com/Thrapis/go-csv-translator/internal/translate"
+	"github.com/Thrapis/go-game-translator/internal/extract"
+	"github.com/Thrapis/go-game-translator/internal/markup"
+	"github.com/Thrapis/go-game-translator/internal/textutil"
+	"github.com/Thrapis/go-game-translator/internal/translate"
 )
 
 // defaultBatchSize is used when Options.BatchSize is unset.

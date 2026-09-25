@@ -7,7 +7,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/Thrapis/go-csv-translator/internal/translate"
+	"github.com/Thrapis/go-game-translator/internal/translate"
 
 	translategooglefree "github.com/bas24/googletranslatefree"
 )

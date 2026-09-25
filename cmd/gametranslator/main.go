@@ -13,10 +13,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/Thrapis/go-csv-translator/internal/app"
-	lingvanexsrv "github.com/Thrapis/go-csv-translator/internal/backend/lingvanex"
-	"github.com/Thrapis/go-csv-translator/internal/config"
-	_ "github.com/Thrapis/go-csv-translator/internal/plugins" // register games, formats, backends
+	"github.com/Thrapis/go-game-translator/internal/app"
+	lingvanexsrv "github.com/Thrapis/go-game-translator/internal/backend/lingvanex"
+	"github.com/Thrapis/go-game-translator/internal/config"
+	_ "github.com/Thrapis/go-game-translator/internal/plugins" // register games, formats, backends
 )
 
 func main() { os.Exit(run()) }

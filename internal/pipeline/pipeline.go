@@ -9,10 +9,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Thrapis/go-csv-translator/internal/extract"
-	"github.com/Thrapis/go-csv-translator/internal/game"
-	"github.com/Thrapis/go-csv-translator/internal/markup"
-	"github.com/Thrapis/go-csv-translator/internal/translate"
+	"github.com/Thrapis/go-game-translator/internal/extract"
+	"github.com/Thrapis/go-game-translator/internal/game"
+	"github.com/Thrapis/go-game-translator/internal/markup"
+	"github.com/Thrapis/go-game-translator/internal/translate"
 
 	"log/slog"
 )
