@@ -516,6 +516,94 @@ func TestPipelineMaskerPath(t *testing.T) {
 	}
 }
 
+// pipeSegmenter is a maskAnalyzer that also splits at "|" (standing in for a
+// hard line break, which the tab format cannot hold).
+type pipeSegmenter struct{ maskAnalyzer }
+
+func (pipeSegmenter) Segment(s string) (segs, seps []string) {
+	segs = strings.Split(s, "|")
+	for range segs[1:] {
+		seps = append(seps, "|")
+	}
+	return segs, seps
+}
+
+func TestPipelineSegmenterSplitsAndRejoins(t *testing.T) {
+	srcDir := t.TempDir()
+	dstDir := filepath.Join(t.TempDir(), "out")
+	mustWrite(t, filepath.Join(srcDir, "d.txt"),
+		"a\tFirst line|Second~\\c[1]|  |Third\nb\tSingle\n")
+
+	be := &batchEcho{}
+	p, err := New(Deps{
+		Analyzer: pipeSegmenter{}, Format: tabFormat{}, Translator: be,
+		Options: Options{
+			SourceFolder: srcDir, DestFolder: dstDir,
+			SourceLang: "ru", TargetLang: "be", Delimiter: "\t",
+		},
+		Logger: discardLogger(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	got := mustRead(t, filepath.Join(dstDir, "d.txt"))
+	want := "a\tT:First line|T:Second\\c[1]|  |T:Third\nb\tT:Single\n"
+	if got != want {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+	// 3 non-blank segments of row a + row b, all in the batched path.
+	if be.batchedItems != 4 || be.singleCalls != 0 {
+		t.Errorf("batched %d items, %d single calls; want 4 batched, 0 single", be.batchedItems, be.singleCalls)
+	}
+}
+
+// leadTagAnalyzer masks a leading "<...>" tag: "<Rich>hello" -> "§0§hello".
+type leadTagAnalyzer struct{ wholeStringAnalyzer }
+
+func (leadTagAnalyzer) Mask(ps *markup.PartialString) (string, []string) {
+	s := ps.Parts[0].Value
+	if i := strings.Index(s, ">"); strings.HasPrefix(s, "<") && i > 0 {
+		return "§0§" + s[i+1:], []string{s[:i+1]}
+	}
+	return s, nil
+}
+
+type echoTranslator struct{}
+
+func (echoTranslator) Translate(_ context.Context, text, _, _ string) (string, error) {
+	return text, nil
+}
+
+// Case restoration must only touch text: a leading tag whose name starts with
+// an upper-case letter stays as it was even though the text is lower-case.
+func TestPipelineCaseRestoreSkipsMarkup(t *testing.T) {
+	srcDir := t.TempDir()
+	dstDir := filepath.Join(t.TempDir(), "out")
+	mustWrite(t, filepath.Join(srcDir, "d.txt"), "a\t<Rich color=\"X\">hello</>\n")
+
+	p, err := New(Deps{
+		Analyzer: leadTagAnalyzer{}, Format: tabFormat{}, Translator: echoTranslator{},
+		Options: Options{
+			SourceFolder: srcDir, DestFolder: dstDir,
+			SourceLang: "ru", TargetLang: "be", Delimiter: "\t",
+		},
+		Logger: discardLogger(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := mustRead(t, filepath.Join(dstDir, "d.txt")), "a\t<Rich color=\"X\">hello</>\n"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 func mustWrite(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {

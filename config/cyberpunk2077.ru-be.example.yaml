@@ -1,0 +1,36 @@
+# Cyberpunk 2077 — Russian -> Belarusian.
+# Copy this file to config/cyberpunk2077.ru-be.yaml (gitignored) and edit the
+# paths. The translator works on the Crowdin CSV tree, not on WolvenKit JSON:
+#
+#   go run ./tools/cp77loc export -in ".../raw" -out ".../flat-ru"
+#   gametranslator -config config/cyberpunk2077.ru-be.yaml     # flat-ru -> flat-be
+#   go run ./tools/cp77loc import -template ".../raw" -in ".../flat-be" -out ".../be"
+
+game: cyberpunk2077
+
+source:
+  folder: "E:/Localization/Cyberpunk 2077/flat-ru"
+  # format omitted -> "crowdin-csv" (id,source,translation,context)
+  files: "*.csv"
+destination:
+  folder: "E:/Localization/Cyberpunk 2077/flat-be"
+
+language:
+  source: ru
+  target: be
+
+multiRowReplicas: false        # every entry is independent
+concurrency: 2                 # keep <= server INTER_THREADS
+batchSize: 64
+
+translators:                   # tried in order; google is the fallback
+  - lingvanex
+  - google
+
+lingvanex:
+  manage: true                 # start the python server on launch, stop it on exit
+  workdir: third_party/lingvanex-server
+  command: [py, ./server.py]
+  requestTimeout: 5m
+
+logLevel: info
