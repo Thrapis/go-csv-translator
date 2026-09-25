@@ -286,12 +286,58 @@ func placeReplicaWhole(lines []extract.DataLine, g span, translated string) {
 	}
 }
 
-// translateManyMasked runs the Masker whole-string pipeline over many source
-// strings at once: mask each, batch-translate, unmask, restore case and outer
-// spacing. A source that mangles its sentinels is retried through the
+// translateManyMasked translates many source strings through the Masker path.
+// If the analyzer is also a markup.Segmenter, every source is first split at
+// its hard line breaks; all segments go through one flat batched pass and are
+// joined back with their original separators (blank segments pass through).
+func (p *Pipeline) translateManyMasked(ctx context.Context, sources []string) ([]string, error) {
+	seg, ok := p.analyzer.(markup.Segmenter)
+	if !ok {
+		return p.translateManyMaskedFlat(ctx, sources)
+	}
+
+	type split struct {
+		first int // index of the source's first segment in flat
+		seps  []string
+	}
+	splits := make([]split, len(sources))
+	var flat []string
+	for i, s := range sources {
+		segs, seps := seg.Segment(s)
+		splits[i] = split{first: len(flat), seps: seps}
+		flat = append(flat, segs...)
+	}
+
+	outs, err := p.translateManyMaskedFlat(ctx, flat)
+	if err != nil {
+		return nil, err
+	}
+
+	res := make([]string, len(sources))
+	for i, sp := range splits {
+		var b strings.Builder
+		for k := 0; k <= len(sp.seps); k++ {
+			j := sp.first + k
+			if strings.TrimSpace(flat[j]) == "" {
+				b.WriteString(flat[j])
+			} else {
+				b.WriteString(outs[j])
+			}
+			if k < len(sp.seps) {
+				b.WriteString(sp.seps[k])
+			}
+		}
+		res[i] = b.String()
+	}
+	return res, nil
+}
+
+// translateManyMaskedFlat runs the Masker whole-string pipeline over many
+// source strings at once: mask each, batch-translate, unmask, restore case and
+// outer spacing. A source that mangles its sentinels is retried through the
 // fragment path. sources[i] that is empty or markup-only yields "" or the
 // rendered original respectively.
-func (p *Pipeline) translateManyMasked(ctx context.Context, sources []string) ([]string, error) {
+func (p *Pipeline) translateManyMaskedFlat(ctx context.Context, sources []string) ([]string, error) {
 	masker := p.analyzer.(markup.Masker)
 	out := make([]string, len(sources))
 
@@ -341,8 +387,9 @@ func (p *Pipeline) translateManyMasked(ctx context.Context, sources []string) ([
 			out[i] = p.analyzer.Render(ps)
 			continue
 		}
-		u := markup.Unmask(raw, md.markers)
-		u = caseFirstLetter(u, firstLetterUpper(md.bare))
+		// Fix the case while markup is still masked: sentinels hold no letters,
+		// so a leading tag or {VAR} can never be re-cased.
+		u := markup.Unmask(caseFirstLetter(raw, firstLetterUpper(md.bare)), md.markers)
 		out[i] = strings.Repeat(" ", md.lead) + u + strings.Repeat(" ", md.trail)
 	}
 	return out, nil
@@ -479,8 +526,9 @@ func firstLetterUpper(s string) bool {
 	return false
 }
 
-// caseFirstLetter adjusts the case of the first Unicode letter in s (skipping
-// any leading markup), leaving everything else untouched.
+// caseFirstLetter adjusts the case of the first Unicode letter in s, leaving
+// everything else untouched. It does not know about markup: call it on masked
+// text, never on rendered text.
 func caseFirstLetter(s string, upper bool) string {
 	for i, r := range s {
 		if !unicode.IsLetter(r) {

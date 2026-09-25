@@ -27,3 +27,13 @@ type Analyzer interface {
 type Masker interface {
 	Mask(ps *PartialString) (masked string, markers []string)
 }
+
+// Segmenter is an optional Analyzer capability for strings that hold several
+// independent lines (hard line breaks in long descriptions, e-mails, a EULA).
+// The pipeline translates each segment as its own string, which keeps every
+// request within the model's input length, and joins the results back with
+// the original separators: segs[0] + seps[0] + segs[1] + ... must equal s, so
+// len(seps) == len(segs)-1. A segment boundary must never fall inside markup.
+type Segmenter interface {
+	Segment(s string) (segs, seps []string)
+}

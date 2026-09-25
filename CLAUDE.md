@@ -24,6 +24,11 @@ go run ./cmd/gametranslator -config config/tcoaal.ru-be.yaml
 
 # inspection helper: split a combined TCOAAL dialogue.csv into per-section files
 go run ./tools/csvsplit -in "path/to/dialogue.csv"
+
+# Cyberpunk 2077: WolvenKit JSON tree <-> Crowdin CSV tree (translator runs on the CSV)
+go run ./tools/cp77loc export -in <raw> -out <flat-ru>
+go run ./tools/cp77loc import -template <raw> -in <flat-be> -out <be>
+go run ./tools/cp77loc verify -in <raw>      # every string re-encoded must be byte-identical
 ```
 
 Real `config/*.yaml` files are gitignored; only `config/*.example.yaml` templates
@@ -86,10 +91,16 @@ Two translation strategies, chosen by whether the Analyzer also implements
   alone. taleworld / titanquest use this (no real corpus to validate a change).
 - **Whole-string (Masker)** — markup parts become `§0§ §1§ …` sentinels, the
   whole line is translated in one request, then `markup.Unmask` splices markup
-  back. tcoaal uses this. Sentinels are `§N§` specifically because they survive
+  back. tcoaal and cyberpunk2077 use this. Sentinels are `§N§` specifically because they survive
   the ru→be CTranslate2 model (~98.5%); `` / `⟦⟧` do not. When sentinels
   come back corrupted (`markup.SentinelsIntact` is false) the pipeline falls back
   to per-fragment translation for that string.
+
+`markup.Segmenter` (optional, Masker path only) splits a string at hard line
+breaks. Each segment is translated as its own batch item and then joined back
+with the original separators. cyberpunk2077 uses it because a single
+onscreens string can be 71k chars, far past the model's decoding limit. A
+segment boundary must never fall inside markup.
 
 ### extract: section-aware formats and `Settings.Extra`
 
@@ -102,8 +113,36 @@ non-translated byte round-trips exactly. `DataLine.Tag` carries the grouping key
 (dialogue `#id`; `LABELS/<key>`, `MENUS/<key>`, `FONT/<key>`, `CREDITS/<n>`;
 bare `LANGUAGE`).
 
-Formats: `delimited` (generic), `tcoaal-csv`, `tcoaal-txt`. TXT is preferred for
-automation. `[VERSION]` always passes through from the source file.
+Formats: `delimited` (generic), `crowdin-csv`, `tcoaal-csv`, `tcoaal-txt`. For
+TCOAAL, TXT is preferred for automation. `[VERSION]` always passes through from
+the source file.
+
+### Cyberpunk 2077: a conversion step outside the pipeline
+
+WolvenKit JSON (`*.json.json`) is never an extract format. `tools/cp77loc`
+flattens it to `crowdin-csv` (`id,source,translation,context`; id =
+`primaryKey`/`stringId`, the male variant is `id@male`). This CSV is what the
+pipeline and Crowdin both read and write. `[en_us]…` VO placeholders and
+glitch text are never exported. Glitch text is deliberately corrupted Zalgo
+stored as Latin-1 mojibake, detected by U+0080–U+009F characters. The analyzer
+also marks both kinds verbatim (`cyberpunk2077.Untranslatable`), as a safety
+net. `import` goes back through
+`internal/wolvenkit.Splice`, which rewrites **only** the variant string literals
+in the original bytes. It asserts that each literal matches the parsed entry,
+and `Quote` encodes new text exactly like System.Text.Json: ASCII only, with
+uppercase `\uXXXX` for non-ASCII and for `" & ' + < > \``. Don't
+re-serialise the JSON, because WolvenKit exports are CRLF, have no trailing
+newline, and contain empty keys that `omitempty` would drop.
+
+The cyberpunk2077 analyzer's `symbolRe` whitelist (the characters sent to the
+model) is empirical, taken from the real ru→be run. Don't widen it without
+re-measuring survival on real output. A first-letter case fix must run on
+*masked* text (`caseFirstLetter` before `Unmask`), or a leading `<Rich>` or
+`{VALUE}` gets re-cased.
+
+`onscreens_final.json.json` duplicates `onscreens.json.json`, so it is not
+exported and takes `onscreens.csv` on import. Other `*_final` files are real
+subtitle scenes.
 
 ### pipeline: orchestration
 
