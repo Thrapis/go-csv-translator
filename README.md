@@ -96,10 +96,20 @@ tree:
 go run ./tools/cp77loc export -in ".../raw" -out ".../flat-ru"
 # 2. machine-translate: fills the translation column (flat-ru -> flat-be)
 go run ./cmd/gametranslator -config config/cyberpunk2077.ru-be.yaml
-# 3. (optional) upload flat-ru to Crowdin, review there, download into flat-be
-# 4. CSV -> WolvenKit JSON, using the original export as the template
+# 3. (optional) human review in a CAT tool (OmegaT, Weblate, ...) via XLIFF 1.2
+go run ./tools/cp77loc xliff -in ".../flat-be" -out ".../xliff-be"
+# 4. CSV or XLIFF -> WolvenKit JSON, using the original export as the template
 go run ./tools/cp77loc import -template ".../raw" -in ".../flat-be" -out ".../be"
+go run ./tools/cp77loc import -template ".../raw" -in ".../xliff-be" -out ".../be"   # after review
 ```
+
+In the XLIFF, engine markup (tags, `{vars}`, `\n`, the non-text parts of
+kiroshi/mothertongue) becomes locked `<ph>` placeholders, which a reviewer can
+move but not edit. Typography such as `—` and `…` stays ordinary text. Machine
+translations arrive in state `needs-review-translation`, and the CSV context
+column becomes a `<note>`. On import, each placeholder is replaced with the
+exact source markup. A unit whose placeholders were lost, duplicated or
+invented is rejected, and it keeps the source text.
 
 The CSV is `id,source,translation,context`. The id is the entry's `primaryKey`
 (on-screen texts) or `stringId` (subtitles). The male-V variant of a gendered
@@ -180,10 +190,11 @@ internal/
   game                 Game interface + optional capabilities + registry
     tcoaal / cyberpunk2077 / taleworld / titanquest
   wolvenkit            WolvenKit JSON reader + byte-exact string splicer
+  xliff                XLIFF 1.2 reader/writer with locked <ph> markup
   textutil             small string helpers
   plugins              blank-imports every game/format/backend to register them
 tools/csvsplit         inspection helper (combined dialogue.csv -> section files)
-tools/cp77loc          Cyberpunk 2077 WolvenKit JSON <-> Crowdin CSV converter
+tools/cp77loc          Cyberpunk 2077 WolvenKit JSON <-> Crowdin CSV / XLIFF converter
 ```
 
 A section-aware format keeps the document skeleton in `extract.Settings.Extra`

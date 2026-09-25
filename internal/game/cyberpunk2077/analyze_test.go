@@ -145,3 +145,31 @@ func TestIsGlitchText(t *testing.T) {
 		t.Error("IsGlitchText misclassified")
 	}
 }
+
+func TestPieces(t *testing.T) {
+	got := Pieces(`Цена — ничто.\n<Rich color="MainColors.Gold">Жми</> {int_0} раз…`)
+	want := []Piece{
+		{`Цена — ничто.`, false},
+		{`\n<Rich color="MainColors.Gold">`, true},
+		{`Жми`, false},
+		{`</>`, true},
+		{` `, false}, // spacing between codes stays editable
+		{`{int_0}`, true},
+		{` раз…`, false},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("piece %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+	k := Pieces(samples[1]) // kiroshi: only the t="…" text is editable
+	if len(k) != 3 || !k[0].Code || k[1].Text != "«Фуюцуки» — машина для ценителей." || !k[2].Code {
+		t.Errorf("kiroshi pieces = %+v", k)
+	}
+	if HasCyrillicText(Pieces("KI113R")) || !HasCyrillicText(Pieces("Новости")) {
+		t.Error("HasCyrillicText misclassified")
+	}
+}

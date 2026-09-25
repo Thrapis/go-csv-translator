@@ -200,3 +200,47 @@ func (a analyzer) Segment(s string) (segs, seps []string) {
 	}
 	return append(segs, cur.String()), seps
 }
+
+// Piece is a run of a string as shown to a human translator: free text, or a
+// Code - engine markup that must reach the game unchanged.
+type Piece struct {
+	Text string
+	Code bool
+}
+
+// Pieces splits s for human translation (e.g. XLIFF export). Tags, {vars},
+// line breaks, control characters and the non-text parts of speech tags are
+// codes; everything else is text - including the symbols (— … –) and Latin
+// runs that are masked from the machine translator only because the model
+// mangles them. Adjacent pieces of the same kind are merged. A string that is
+// never translated (VO placeholder, glitch text) is one code.
+func Pieces(s string) []Piece {
+	if Untranslatable(s) {
+		return []Piece{{Text: s, Code: true}}
+	}
+	var out []Piece
+	for _, p := range (analyzer{}).Analyze(s).Parts {
+		code := false
+		switch p.Type {
+		case typeTag, typeVariable, typeBreak, typeInnerBreak, typeControl:
+			code = true
+		}
+		if n := len(out); n > 0 && out[n-1].Code == code {
+			out[n-1].Text += p.Value
+		} else {
+			out = append(out, Piece{Text: p.Value, Code: code})
+		}
+	}
+	return out
+}
+
+// HasCyrillicText reports whether any text piece holds a Cyrillic letter,
+// i.e. whether the string has anything for a ru->be translator to do.
+func HasCyrillicText(ps []Piece) bool {
+	for _, p := range ps {
+		if !p.Code && cyrillic.MatchString(p.Text) {
+			return true
+		}
+	}
+	return false
+}

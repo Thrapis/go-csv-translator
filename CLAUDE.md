@@ -27,7 +27,8 @@ go run ./tools/csvsplit -in "path/to/dialogue.csv"
 
 # Cyberpunk 2077: WolvenKit JSON tree <-> Crowdin CSV tree (translator runs on the CSV)
 go run ./tools/cp77loc export -in <raw> -out <flat-ru>
-go run ./tools/cp77loc import -template <raw> -in <flat-be> -out <be>
+go run ./tools/cp77loc xliff -in <flat-be> -out <xliff-be>   # XLIFF 1.2 for human review
+go run ./tools/cp77loc import -template <raw> -in <flat-be|xliff-be> -out <be>
 go run ./tools/cp77loc verify -in <raw>      # every string re-encoded must be byte-identical
 ```
 
@@ -139,6 +140,13 @@ model) is empirical, taken from the real ru→be run. Don't widen it without
 re-measuring survival on real output. A first-letter case fix must run on
 *masked* text (`caseFirstLetter` before `Unmask`), or a leading `<Rich>` or
 `{VALUE}` gets re-cased.
+
+There are two different markup splits, on purpose. `Mask` (machine
+translation) also hides characters the model mangles. `cyberpunk2077.Pieces`
+(human review, XLIFF) locks only real engine markup, because a person can
+handle `—`. `internal/xliff` numbers `<ph>` ids from the source. `Read`
+rebuilds every target placeholder from the source markup with the same id,
+and rejects a unit whose placeholders don't map one-to-one.
 
 `onscreens_final.json.json` duplicates `onscreens.json.json`, so it is not
 exported and takes `onscreens.csv` on import. Other `*_final` files are real
