@@ -34,10 +34,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Thrapis/go-csv-translator/internal/extract/crowdincsv"
-	"github.com/Thrapis/go-csv-translator/internal/game/cyberpunk2077"
-	"github.com/Thrapis/go-csv-translator/internal/wolvenkit"
-	"github.com/Thrapis/go-csv-translator/internal/xliff"
+	"github.com/Thrapis/go-game-translator/internal/extract/crowdincsv"
+	"github.com/Thrapis/go-game-translator/internal/game/cyberpunk2077"
+	"github.com/Thrapis/go-game-translator/internal/wolvenkit"
+	"github.com/Thrapis/go-game-translator/internal/xliff"
 )
 
 const (

@@ -7,11 +7,11 @@ package tcoaal
 import (
 	"strings"
 
-	"github.com/Thrapis/go-csv-translator/internal/extract"
-	_ "github.com/Thrapis/go-csv-translator/internal/extract/tcoaalcsv" // register "tcoaal-csv"
-	_ "github.com/Thrapis/go-csv-translator/internal/extract/tcoaaltxt" // register "tcoaal-txt"
-	"github.com/Thrapis/go-csv-translator/internal/game"
-	"github.com/Thrapis/go-csv-translator/internal/markup"
+	"github.com/Thrapis/go-game-translator/internal/extract"
+	_ "github.com/Thrapis/go-game-translator/internal/extract/tcoaalcsv" // register "tcoaal-csv"
+	_ "github.com/Thrapis/go-game-translator/internal/extract/tcoaaltxt" // register "tcoaal-txt"
+	"github.com/Thrapis/go-game-translator/internal/game"
+	"github.com/Thrapis/go-game-translator/internal/markup"
 )
 
 func init() { game.Register(New()) }

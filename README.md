@@ -1,4 +1,4 @@
-# go-csv-translator
+# go-game-translator
 
 Machine-translates a game's localization files. Each file is run through a
 pipeline:

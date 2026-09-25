@@ -1,4 +1,4 @@
-module github.com/Thrapis/go-csv-translator
+module github.com/Thrapis/go-game-translator
 
 go 1.22.5
 

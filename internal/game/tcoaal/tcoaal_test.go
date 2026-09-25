@@ -3,7 +3,7 @@ package tcoaal
 import (
 	"testing"
 
-	"github.com/Thrapis/go-csv-translator/internal/extract"
+	"github.com/Thrapis/go-game-translator/internal/extract"
 )
 
 func TestSameReplica(t *testing.T) {

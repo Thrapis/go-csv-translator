@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Thrapis/go-csv-translator/internal/markup"
+	"github.com/Thrapis/go-game-translator/internal/markup"
 )
 
 // Part types produced by this analyzer.

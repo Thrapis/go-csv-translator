@@ -12,8 +12,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Thrapis/go-csv-translator/internal/extract"
-	"github.com/Thrapis/go-csv-translator/internal/markup"
+	"github.com/Thrapis/go-game-translator/internal/extract"
+	"github.com/Thrapis/go-game-translator/internal/markup"
 )
 
 // --- test doubles -----------------------------------------------------------

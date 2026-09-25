@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Thrapis/go-csv-translator/internal/extract/tcoaalcsv"
+	"github.com/Thrapis/go-game-translator/internal/extract/tcoaalcsv"
 )
 
 // parasiteSource resolves an existing human translation for a replica id from
